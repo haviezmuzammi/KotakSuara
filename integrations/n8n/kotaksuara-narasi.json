@@ -24,7 +24,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Ganti teks naskah di sini. Ayat: [AYAT]...[/AYAT] (menjadi jeda).\nreturn [{ json: {\n  text: \"Bismillah. Ini uji workflow n8n untuk KotakSuara. Nabi Muhammad SAW adalah teladan terbaik. Insya Allah narasi ini selesai dengan baik. Wallahu a'lam.\",\n  with_srt: true,\n} }];"
+        "jsCode": "// Ganti teks naskah di sini. Ayat: [AYAT]...[/AYAT] (menjadi jeda).\nreturn [{ json: {\n  text: \"Bismillah. Ini uji workflow n8n untuk KotakSuara. Nabi Muhammad SAW adalah teladan terbaik. Insya Allah narasi ini selesai dengan baik. Wallahu a'lam.\",\n  with_srt: true,\n  // Gaya baca: netral, dokumenter, sedih, bahagia, horor, liputan (GET /v1/styles)\n  style: \"netral\",\n} }];"
       }
     },
     {
@@ -51,7 +51,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: $('Naskah').first().json.text, with_srt: $('Naskah').first().json.with_srt }) }}"
+        "jsonBody": "={{ JSON.stringify({ text: $('Naskah').first().json.text, with_srt: $('Naskah').first().json.with_srt, style: $('Naskah').first().json.style }) }}"
       },
       "credentials": {
         "httpHeaderAuth": {

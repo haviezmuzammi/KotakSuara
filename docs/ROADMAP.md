@@ -81,7 +81,7 @@ selesai; unduh hanya bobot LoRA hasil latihan.
   (`127.0.0.1:8782`) → KotakSuara di LAN. PC tetap tidak terbuka ke internet; API key LAN tidak pernah keluar.
 - Lapisan akses: Cloudflare Access service token (header `CF-Access-Client-Id` / `CF-Access-Client-Secret`, bila
   diaktifkan) **dan** `Authorization: Bearer $KOTAKSUARA_TOKEN`; batas 60 permintaan/menit.
-- Endpoint yang diteruskan: `GET /health`, `GET /v1/engines`, `GET /v1/profiles` (id & nama saja),
+- Endpoint yang diteruskan: `GET /health`, `GET /v1/engines`, `GET /v1/styles`, `GET /v1/profiles` (id & nama saja),
   `POST /v1/tts`, `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/audio[?format=mp3]`, `GET /v1/jobs/{id}/srt`.
   Membuat/menghapus profil suara dan unggah audio **tidak** tersedia dari internet (hanya lewat bot Telegram).
 - PC tidur → `POST /v1/tts` mengirim Wake-on-LAN dan menjawab `503` + `Retry-After: 90`; ulangi setelahnya.
