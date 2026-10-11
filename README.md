@@ -91,3 +91,8 @@ powershell -File scripts\live_run.ps1                # real models on 127.0.0.1:
 
 Code: MIT (see `LICENSE`). Model weights keep their own licenses — see the engine table above;
 `mms_id` (CC-BY-NC) and `edge_id` (unofficial) output must not be used in monetized videos.
+
+## For AI agents and contributors
+
+See `CLAUDE.md` (rules: no Quran synthesis, consent for cloning, license flags, no secrets) and
+`docs/ROADMAP.md` (voice cloning via Telegram, Indonesian fine-tuning plan, cloud-agent access).
