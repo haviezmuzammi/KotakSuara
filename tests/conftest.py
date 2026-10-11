@@ -69,7 +69,8 @@ def settings(tmp_path) -> Settings:
     lexicon = tmp_path / "lexicon.yaml"
     shutil.copy(REPO_ROOT / "config" / "lexicon.yaml", lexicon)
     return Settings(api_key=API_KEY, data_dir=tmp_path / "data", lexicon_path=lexicon,
-                    default_engine="fake", crossfade_ms=0, ayat_silence_ms=1000)
+                    default_engine="fake", crossfade_ms=0, ayat_silence_ms=1000,
+                    allowed_clients=("testclient", "127.0.0.1"))
 
 
 @pytest.fixture

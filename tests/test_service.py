@@ -327,3 +327,22 @@ def test_settings_require_strong_key(tmp_path, monkeypatch):
     assert s.api_key.startswith("from-file") and s.port == 9999 and s.crossfade_ms == 200
     monkeypatch.setenv("API_KEY", API_KEY)
     assert load_settings(env).api_key == API_KEY
+
+
+def test_client_allowlist(service):
+    from fastapi.testclient import TestClient
+
+    from app.service import create_app
+
+    blocked = TestClient(create_app(service), client=("192.168.2.99", 5000), headers={"X-API-Key": API_KEY})
+    r = blocked.get("/health")
+    assert r.status_code == 403 and r.json() == {"detail": "client not allowed"}
+
+
+def test_allowed_clients_setting(tmp_path, monkeypatch):
+    from app.config import load_settings
+
+    monkeypatch.setenv("API_KEY", API_KEY)
+    assert load_settings(tmp_path / "x.env").allowed_clients == ("127.0.0.1", "::1", "192.168.1.60")
+    monkeypatch.setenv("ALLOWED_CLIENTS", " 10.0.0.5 , ,127.0.0.1")
+    assert load_settings(tmp_path / "x.env").allowed_clients == ("10.0.0.5", "127.0.0.1")

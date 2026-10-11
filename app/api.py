@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.text.segmenter import AyatTagError, split_segments
@@ -226,6 +226,16 @@ def delete_profile(profile_id: str, request: Request) -> None:
 def build_api(svc) -> FastAPI:
     app = FastAPI(title="yassalam-tts-id", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.svc = svc
+    allowed = set(svc.settings.allowed_clients)
+
+    @app.middleware("http")
+    async def client_allowlist(request: Request, call_next):
+        # Defense in depth next to the Windows Firewall: only known clients may talk to the API.
+        host = request.client.host if request.client else ""
+        if host not in allowed:
+            return JSONResponse({"detail": "client not allowed"}, status_code=403)
+        return await call_next(request)
+
     app.include_router(router)
     return app
 

@@ -44,6 +44,8 @@ GPU models go through `ModelManager` (max `MAX_LOADED_MODELS` on the GPU, LRU un
 
 ## API (all endpoints require `X-API-Key`)
 
+Requests are also limited to `ALLOWED_CLIENTS` (default: localhost + the n8n server) in addition to the Windows Firewall rule.
+
 | method | path | |
 |---|---|---|
 | GET | `/health` | `busy`, `running_job`, `queue_length`, `loaded_models`, `lexicon_error` |
