@@ -23,10 +23,12 @@ memotong kalimat menjadi potongan ms/ar pendek membuat model berbicara lambat da
 3,3 dtk), sehingga dibatalkan (2026-10-11). Matikan per permintaan dengan `"arabic_terms": false`.
 Tulisan Arab yang diketik di naskah tetap menjadi jeda (kebijakan ayat).
 
-### A3. `/rekam_istilah` lewat bot — TERTUNDA (referensi)
-Bot mengirim istilah dari `training/naskah/naskah_id.tsv` satu per satu; narator membalas voice note; file disimpan
-ke `D:\AI\datasets\istilah\<narator>\<id>.ogg` sebagai data latih B (pelafalan Arab-Indonesia yang benar dari
-manusia). Dikerjakan bila hasil `arabic_terms` masih kurang atau saat mengumpulkan data B.
+### A3. `/cek_pelafalan` lewat bot — SELESAI (2026-10-11)
+Bot mengirim tiap istilah `arabic_terms` dalam 2 versi (model Arab vs ejaan Latin) dengan suara aktif; pengguna
+memilih: **Arab benar** · **Latin lebih baik** (istilah dipindah ke bacaan Latin lewat
+`PUT /v1/lexicon/arabic-terms/off` → `data/lexicon.local.yaml`) · **Dua-duanya salah** (bot meminta voice note
+pelafalan yang benar, disimpan sebagai data latih B di server `telegram-wol-bot/data/istilah/<user>/`) ·
+Lewati · Selesai. `/hasil_pelafalan` merangkum; `/cek_pelafalan ulang` mereset.
 
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
