@@ -1,0 +1,13 @@
+[project]
+name = "yassalam-tts-id"
+version = "0.1.0"
+description = "Indonesian TTS + voice-clone microservice for Yassalam kajian/dakwah narration"
+requires-python = "==3.11.*"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["gpu: needs the real models and a CUDA GPU (run explicitly with -m gpu)"]
+
+[tool.coverage.run]
+source = ["app"]

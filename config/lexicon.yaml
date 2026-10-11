@@ -1,0 +1,52 @@
+# Lexicon for the Indonesian normalizer. Hot-reloaded: save the file, the next job uses it.
+# If the file becomes invalid YAML, the service keeps the previous version and /health shows lexicon_error.
+#
+# symbols:        replaced everywhere, before Arabic detection (so ﷺ is spoken, not silenced)
+# abbreviations:  case-SENSITIVE, whole word ("SAW" yes, "saw" no unless listed)
+# pronunciations: case-INSENSITIVE respellings that help the Malay (ms) voice say Indonesian words;
+#                 tune these by listening — add a word when the voice mispronounces it.
+
+symbols:
+  "ﷺ": "shallallahu 'alaihi wa sallam"
+  "ﷻ": "jalla jalaluh"
+  "&": "dan"
+
+abbreviations:
+  SAW: "shallallahu 'alaihi wa sallam"
+  "S.A.W.": "shallallahu 'alaihi wa sallam"
+  "saw.": "shallallahu 'alaihi wa sallam"
+  SWT: "subhanahu wa ta'ala"
+  "S.W.T.": "subhanahu wa ta'ala"
+  "swt.": "subhanahu wa ta'ala"
+  RA: "radhiyallahu 'anhu"
+  "ra.": "radhiyallahu 'anhu"
+  RAH: "rahimahullah"
+  "HR.": "hadits riwayat"
+  HR: "hadits riwayat"
+  "dll.": "dan lain-lain"
+  "dsb.": "dan sebagainya"
+  "dst.": "dan seterusnya"
+  "tsb.": "tersebut"
+  "yg": "yang"
+  "dgn": "dengan"
+  "dg": "dengan"
+  "utk": "untuk"
+  "No.": "nomor"
+  "hlm.": "halaman"
+  "Ust.": "Ustadz"
+  "Prof.": "Profesor"
+  "Dr.": "Doktor"
+  WIB: "waktu Indonesia bagian barat"
+  WITA: "waktu Indonesia bagian tengah"
+  WIT: "waktu Indonesia bagian timur"
+  MPZ: "M P Z"
+  ZIS: "zakat, infak, dan sedekah"
+
+pronunciations:
+  "insya Allah": "insya-Allah"
+  "insyaallah": "insya-Allah"
+  "shalat": "solat"
+  "shalawat": "selawat"
+  "Masya Allah": "masya-Allah"
+  "masyaallah": "masya-Allah"
+  "alhamdulillah": "alhamdulillah"

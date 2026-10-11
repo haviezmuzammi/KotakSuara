@@ -1,0 +1,13 @@
+# Phase 1 dry-run input (resolved with --extra-index-url cu126)
+torch
+torchaudio
+chatterbox-tts
+faster-whisper
+fastapi
+uvicorn[standard]
+pyyaml
+pytest
+# resemble-perth imports pkg_resources (removed from newer setuptools)
+setuptools<81
+edge-tts
+pytest-cov
