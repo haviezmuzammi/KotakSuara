@@ -57,9 +57,25 @@ selesai; unduh hanya bobot LoRA hasil latihan.
   MP3 + SRT sebagai rilis/berkas di repo privat → tulis `results/<id>.json`.
 - Tidak ada port terbuka ke internet; hak akses = izin GitHub; jejak audit otomatis. Latensi ±1–2 menit + waktu proses.
 
-### C2. Tunnel terautentikasi (opsi lanjutan)
-- `cloudflared` di **server** (bukan PC) → gateway kecil yang meneruskan ke KotakSuara di LAN.
-- Wajib: Cloudflare Access service token (atau mTLS) + `X-API-Key`; rate limit; hanya endpoint TTS/job.
-- Membutuhkan domain di Cloudflare dan izin jaringan sandbox agen cloud ke domain itu.
-- Dapat dibungkus sebagai **MCP server** agar agen claude.ai memakai TTS sebagai tool.
-- Lebih cepat (real-time) tetapi menambah permukaan serangan; aktifkan hanya bila C1 tidak cukup.
+### C2. Gateway internet `https://suara.yassalam.id` — AKTIF sejak 2026-10-11
+- Jalur: Cloudflare Tunnel **khusus** (`kotaksuara`, terpisah dari tunnel layanan lain) → gateway di server
+  (`127.0.0.1:8782`) → KotakSuara di LAN. PC tetap tidak terbuka ke internet; API key LAN tidak pernah keluar.
+- Lapisan akses: Cloudflare Access service token (header `CF-Access-Client-Id` / `CF-Access-Client-Secret`, bila
+  diaktifkan) **dan** `Authorization: Bearer $KOTAKSUARA_TOKEN`; batas 60 permintaan/menit.
+- Endpoint yang diteruskan: `GET /health`, `GET /v1/engines`, `GET /v1/profiles` (id & nama saja),
+  `POST /v1/tts`, `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/audio[?format=mp3]`, `GET /v1/jobs/{id}/srt`.
+  Membuat/menghapus profil suara dan unggah audio **tidak** tersedia dari internet (hanya lewat bot Telegram).
+- PC tidur → `POST /v1/tts` mengirim Wake-on-LAN dan menjawab `503` + `Retry-After: 90`; ulangi setelahnya.
+
+Contoh untuk agen (token dari secret lingkungan, jangan ditulis di kode):
+
+```bash
+H=(-H "Authorization: Bearer $KOTAKSUARA_TOKEN")   # + -H "CF-Access-Client-Id: ..." -H "CF-Access-Client-Secret: ..."
+curl -s "${H[@]}" https://suara.yassalam.id/health
+JOB=$(curl -s "${H[@]}" -H 'Content-Type: application/json' -X POST https://suara.yassalam.id/v1/tts \
+      -d '{"text":"Bismillah. ...","profile_id":null,"with_srt":true}' | jq -r .job_id)
+curl -s "${H[@]}" https://suara.yassalam.id/v1/jobs/$JOB            # ulangi sampai status done/failed
+curl -s "${H[@]}" -o narasi.mp3 "https://suara.yassalam.id/v1/jobs/$JOB/audio?format=mp3"
+```
+
+Lingkungan Claude cloud perlu mengizinkan akses jaringan ke `suara.yassalam.id`. Bila tidak bisa, pakai C1.

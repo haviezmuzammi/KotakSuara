@@ -17,8 +17,9 @@ work on the code through GitHub and cannot reach the running service directly. R
 4. **No secrets in git.** Configuration comes from `.env` (see `.env.example`). Do not hardcode keys, IPs of
    private hosts, or tokens. The repository is public.
 5. **Do not expose the service publicly.** Access is limited by the Windows Firewall + `ALLOWED_CLIENTS`.
-   Remote access for cloud agents goes through the designs in `docs/ROADMAP.md` (C1 GitHub job queue,
-   C2 authenticated tunnel), never through port forwarding or an unauthenticated endpoint.
+   Cloud agents reach it only through `docs/ROADMAP.md`: C1 GitHub job queue (private repo
+   mmymedia-lab/KotakSuara-jobs) or C2 gateway `https://suara.yassalam.id` (bearer token from the environment
+   secret `KOTAKSUARA_TOKEN`). Never print, log or commit that token; never add port forwarding.
 6. Religious content: Ahlus Sunnah wal Jama'ah (manhaj salaf) framing; do not author fatwas. Narration
    scripts come from Yassalam's team.
 
