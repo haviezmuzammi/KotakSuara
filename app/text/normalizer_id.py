@@ -36,6 +36,73 @@ _LEADING_ZERO = re.compile(r"\b0\d{3,}\b")
 
 _ERA_WORDS = {"H": "Hijriah", "AH": "Hijriah", "M": "Masehi", "SM": "sebelum Masehi"}
 
+# Curated Arabic terms (lexicon `arabic_terms`) become «⟪arabic+words⟫» markers so the engine can speak them in
+# Arabic. Only lexicon entries are converted; Arabic script typed in a script is still silenced by the segmenter.
+ARABIC_MARK = re.compile(r"⟪([^⟫]+)⟫")
+
+
+def _term_pattern(latin: str) -> re.Pattern:
+    """Tolerate spelling variants: optional apostrophes, space/hyphen/nothing between parts, any case."""
+    out = []
+    for ch in latin:
+        if ch in "'`’":
+            out.append("['`’]?")
+        elif ch in " -":
+            out.append(r"[\s\-]?")
+        else:
+            out.append(re.escape(ch))
+    return re.compile(r"(?<!\w)" + "".join(out) + r"(?!\w)", re.IGNORECASE)
+
+
+def mark_arabic_terms(text: str, lex: LexiconData) -> str:
+    for latin in sorted(lex.arabic_terms, key=len, reverse=True):
+        arabic = lex.arabic_terms[latin].strip().replace(" ", "+")
+        text = _term_pattern(latin).sub(f"⟪{arabic}⟫", text)
+    return text
+
+
+def _attach_leading_punctuation(text: str, parts: list[tuple[str, str, str]]) -> str:
+    """Punctuation right after an Arabic term ("⟪..⟫. Bulan") belongs to the term, not the next sentence."""
+    m = re.match(r"^([^\w\s]+)\s*", text)
+    if m and parts and parts[-1][0] == "ar" and re.search(r"\w", text):
+        lang, txt, fb = parts[-1]
+        parts[-1] = (lang, txt + m.group(1), fb + m.group(1))
+        return text[m.end():]
+    return text
+
+
+def split_language_parts(chunk: str, lex: LexiconData) -> list[tuple[str, str, str]]:
+    """Split a normalized chunk into (language, text, fallback) parts.
+
+    language is "id" or "ar"; fallback is the Latin spelling to use when the engine cannot speak Arabic.
+    """
+    latin_for: dict[str, str] = {}
+    for latin, arabic in lex.arabic_terms.items():
+        latin_for.setdefault(arabic.strip(), latin)
+    parts: list[tuple[str, str, str]] = []
+    pos = 0
+    for m in ARABIC_MARK.finditer(chunk):
+        before = _attach_leading_punctuation(chunk[pos:m.start()].strip(), parts)
+        if re.search(r"\w", before):
+            parts.append(("id", before, before))
+        elif before and parts:  # punctuation right after a term, e.g. "⟪..⟫."
+            lang, txt, fb = parts[-1]
+            parts[-1] = (lang, txt + before, fb + before)
+        arabic = m.group(1).replace("+", " ")
+        parts.append(("ar", arabic, latin_for.get(arabic, arabic)))
+        pos = m.end()
+    tail = _attach_leading_punctuation(chunk[pos:].strip(), parts)
+    if re.search(r"\w", tail):
+        parts.append(("id", tail, tail))
+    elif tail and parts:
+        lang, txt, fb = parts[-1]
+        parts[-1] = (lang, txt + tail, fb + tail)
+    return parts
+
+
+def display_text(chunk: str) -> str:
+    return ARABIC_MARK.sub(lambda m: m.group(1).replace("+", " "), chunk)
+
 
 def _num_words(token: str) -> str:
     integer, _, fraction = token.replace(".", "").partition(",")
@@ -138,6 +205,7 @@ def normalize(text: str, lex: LexiconData) -> str:
     text = _QS_NUMERIC.sub(_qs_numeric, text)
     for pattern, replacement in compile_replacements(lex.abbreviations, ignore_case=False):
         text = pattern.sub(lambda m, r=replacement: _abbreviation(r, m, text), text)
+    text = mark_arabic_terms(text, lex)
 
     text = _TIME.sub(_time, text)
     text = _CURRENCY.sub(_currency, text)

@@ -17,6 +17,7 @@ class EngineInfo:
     unofficial: bool = False
     vram_mb: int = 0  # 0 = no GPU model (cloud API or CPU-only)
     supports_clone: bool = False
+    extra_languages: tuple[str, ...] = ()  # e.g. ("ar",): can speak curated Arabic terms in Arabic
     voices: tuple[str, ...] = ()
     notes: str = ""
 
@@ -24,6 +25,7 @@ class EngineInfo:
         data = asdict(self)
         data["languages"] = list(self.languages)
         data["voices"] = list(self.voices)
+        data["extra_languages"] = list(self.extra_languages)
         return data
 
 
@@ -32,6 +34,7 @@ class VoiceSpec:
     voice: str | None = None            # named voice for cloud engines
     reference_path: Path | None = None  # consented reference audio for cloning
     params: dict = field(default_factory=dict)
+    language: str | None = None         # None = engine default; "ar" for curated Arabic terms
 
 
 class ManagedModel(ABC):

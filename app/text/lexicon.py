@@ -21,6 +21,7 @@ class LexiconData:
     symbols: dict[str, str] = field(default_factory=dict)
     abbreviations: dict[str, str] = field(default_factory=dict)
     pronunciations: dict[str, str] = field(default_factory=dict)
+    arabic_terms: dict[str, str] = field(default_factory=dict)
     version: float = 0.0
 
 
@@ -45,6 +46,7 @@ def parse_lexicon(text: str, version: float = 0.0) -> LexiconData:
         symbols=_string_map(raw.get("symbols"), "symbols"),
         abbreviations=_string_map(raw.get("abbreviations"), "abbreviations"),
         pronunciations=_string_map(raw.get("pronunciations"), "pronunciations"),
+        arabic_terms=_string_map(raw.get("arabic_terms"), "arabic_terms"),
         version=version,
     )
 

@@ -63,7 +63,9 @@ restarts the process (the service manager restarts it and the job is re-queued o
 
 ## Lexicon
 
-`config/lexicon.yaml` — symbols, abbreviations (case-sensitive), pronunciations (case-insensitive). Hot-reloaded;
+`config/lexicon.yaml` — symbols, abbreviations (case-sensitive), pronunciations (case-insensitive) and
+`arabic_terms` (curated Latin spellings spoken in Arabic by engines whose `extra_languages` include `ar`; other
+engines fall back to the Latin spelling). Hot-reloaded;
 an invalid file is ignored (previous version kept) and reported in `/health.lexicon_error`.
 
 ## Setup (Windows, all on D:)

@@ -58,12 +58,12 @@ def test_number_helpers():
     ("Lihat QS Ali Imran: 102-103.", "Lihat Al-Qur'an surah Ali Imran ayat seratus dua sampai seratus tiga."),
     ("Lihat QS 2:255.", "Lihat Al-Qur'an surah nomor dua ayat dua ratus lima puluh lima."),
     ("Lihat QS 2:1-5.", "Lihat Al-Qur'an surah nomor dua ayat satu sampai lima."),
-    ("Nabi SAW bersabda (HR. Muslim).", "Nabi shallallahu 'alaihi wa sallam bersabda, hadits riwayat Muslim."),
-    ("Allah SWT berfirman.", "Allah subhanahu wa ta'ala berfirman."),
+    ("Nabi SAW bersabda (HR. Muslim).", "Nabi ⟪صَلَّى+اللهُ+عَلَيْهِ+وَسَلَّمَ⟫ bersabda, hadits riwayat Muslim."),
+    ("Allah SWT berfirman.", "Allah ⟪سُبْحَانَهُ+وَتَعَالَى⟫ berfirman."),
     ("Shalat itu tiang agama.", "Solat itu tiang agama."),
-    ("Insya Allah besok.", "Insya-Allah besok."),
+    ("Insya Allah besok.", "⟪إِنْ+شَاءَ+اللهُ⟫ besok."),
     ("Kitab, buku, dll.", "Kitab, buku, dan lain-lain."),
-    ("Rasulullah ﷺ bersabda.", "Rasulullah shallallahu 'alaihi wa sallam bersabda."),
+    ("Rasulullah ﷺ bersabda.", "Rasulullah ⟪صَلَّى+اللهُ+عَلَيْهِ+وَسَلَّمَ⟫ bersabda."),
     ("Ustadz & santri", "Ustadz dan santri."),
     ("## Judul\nIsi paragraf", "Judul. Isi paragraf."),
     ("Pada 5 M bukan tahun.", "Pada lima M bukan tahun."),
@@ -161,8 +161,8 @@ def test_lexicon_deleted_after_load_keeps_data(tmp_path):
 
 
 def test_new_honorific_abbreviations(lex):
-    assert normalize("Nabi Ibrahim a.s. dan Abu Bakar r.a.", lex) == \
-        "Nabi Ibrahim 'alaihissalam dan Abu Bakar radhiyallahu 'anhu."
+    assert display_text(normalize("Nabi Ibrahim a.s. dan Abu Bakar r.a.", lex)) == \
+        "Nabi Ibrahim عَلَيْهِ السَّلَامُ dan Abu Bakar رَضِيَ اللهُ عَنْهُ."
     assert normalize("Layanan KotakSuara siap.", lex) == "Layanan Kotak Suara siap."
 
 
@@ -175,3 +175,37 @@ def test_recording_script_is_clean():
     assert len(rows) >= 200
     assert len({r["id"] for r in rows}) == len(rows)
     assert not any(re.search(r"[\u0600-\u06FF]", r["teks"]) for r in rows)  # no Arabic script / verses
+
+
+# curated Arabic terms ---------------------------------------------------------
+from app.text.normalizer_id import display_text, split_language_parts  # noqa: E402
+
+SAW_AR = "صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ"
+
+
+@pytest.mark.parametrize("written", ["Nabi SAW bersabda.", "Nabi shallallahu 'alaihi wa sallam bersabda.",
+                                     "Nabi Shallallahu alaihi wa sallam bersabda.", "Nabi ﷺ bersabda."])
+def test_arabic_terms_variants_become_one_arabic_part(written, lex):
+    parts = split_language_parts(normalize(written, lex), lex)
+    assert parts == [("id", "Nabi", "Nabi"), ("ar", SAW_AR, "shallallahu 'alaihi wa sallam"),
+                     ("id", "bersabda.", "bersabda.")]
+
+
+def test_arabic_terms_names_and_trailing_punctuation(lex):
+    text = normalize("Allah adalah Ar-Rahman, Yang Maha Pengasih. Insya Allah besok. Alhamdulillah.", lex)
+    parts = split_language_parts(text, lex)
+    assert [p[0] for p in parts] == ["id", "ar", "id", "ar", "id", "ar"]
+    assert parts[1][1] == "الرَّحْمَٰنُ," and parts[2][1] == "Yang Maha Pengasih."
+    assert parts[-1] == ("ar", "الْحَمْدُ لِلَّهِ.", "Alhamdulillah.")
+    assert "⟪" not in display_text(text) and "الرَّحْمَٰنُ" in display_text(text)
+
+
+def test_longest_arabic_term_wins_and_lookalikes_untouched(lex):
+    parts = split_language_parts(normalize("Bismillahirrahmanirrahim. Bulan Rabiul Akhir dan Jumadil Awal.", lex), lex)
+    assert parts[0] == ("ar", "بِسْمِ اللهِ الرَّحْمَٰنِ الرَّحِيمِ.", "Bismillahirrahmanirrahim.")
+    assert parts[1][0] == "id" and "Rabiul Akhir" in parts[1][1] and "Jumadil Awal" in parts[1][1]
+
+
+def test_typed_arabic_script_is_still_silenced(lex):
+    segs = split_segments(apply_symbols("Doa: بِسْمِ اللهِ selesai. Bismillah.", lex))
+    assert [s.kind for s in segs] == ["speech", "ayat", "speech"]

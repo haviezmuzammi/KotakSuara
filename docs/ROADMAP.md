@@ -15,6 +15,17 @@ Bot `@yassalam_monitor_bot` (repo terpisah di server) memakai API KotakSuara:
 Bot menyalakan PC lewat Wake-on-LAN bila layanan belum aktif.
 Catatan: klon zero-shot meniru **warna suara**; logat masih condong Melayu (model `ms`). Untuk logat Indonesia → B.
 
+### A2. Istilah Arab dibaca dengan model Arab — SELESAI (2026-10-11)
+`arabic_terms` di `config/lexicon.yaml` (94 entri: Asmaul Husna, gelar nabi/sahabat/ulama, dzikir & salam).
+Istilah dalam ejaan Latin (mis. "Ar-Rahman", "SAW", "r.a.", "insya Allah") diucapkan oleh Chatterbox `ar` dengan
+suara/klon yang sama; teks Indonesia di sekitarnya tetap `ms`. Hasil A/B: versi Arab dinilai lebih baik.
+Tulisan Arab yang diketik di naskah tetap menjadi jeda (kebijakan ayat).
+
+### A3. `/rekam_istilah` lewat bot — TERTUNDA (referensi)
+Bot mengirim istilah dari `training/naskah/naskah_id.tsv` satu per satu; narator membalas voice note; file disimpan
+ke `D:\AI\datasets\istilah\<narator>\<id>.ogg` sebagai data latih B (pelafalan Arab-Indonesia yang benar dari
+manusia). Dikerjakan bila hasil `arabic_terms` masih kurang atau saat mengumpulkan data B.
+
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
 Pendekatan yang disarankan untuk **beberapa narator**: latih **satu adaptor LoRA "logat Indonesia"** dari

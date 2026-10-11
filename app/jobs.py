@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Callable
 
@@ -17,7 +17,7 @@ from app.engines.model_manager import ModelManager
 from app.stt.whisper import WhisperSTT, to_srt
 from app.text.chunker import chunk_text
 from app.text.lexicon import Lexicon
-from app.text.normalizer_id import apply_symbols, normalize
+from app.text.normalizer_id import apply_symbols, display_text, normalize, split_language_parts
 from app.text.segmenter import split_segments
 from app.worker import JobError
 
@@ -37,8 +37,29 @@ def plan_script(text: str, lexicon: Lexicon, max_chunk_chars: int) -> list[dict]
             plan.append({"kind": "ayat", "text": segment.text, "source": segment.source})
             continue
         for chunk in chunk_text(normalize(segment.text, lex), max_chunk_chars):
-            plan.append({"kind": "speech", "text": chunk})
+            plan.append({"kind": "speech", "text": display_text(chunk), "parts": split_language_parts(chunk, lex)})
     return plan
+
+
+def render_calls(parts: list[tuple[str, str, str]], engine: TTSEngine) -> list[tuple[str, str | None]]:
+    """Turn language parts into engine calls [(text, language)].
+
+    Engines that can speak Arabic get separate calls for curated Arabic terms; Indonesian text right before a
+    term ends with a comma so the voice keeps a continuing (not sentence-final) intonation. Other engines get
+    one call with the Latin spellings.
+    """
+    if "ar" not in engine.info.extra_languages:
+        return [(" ".join(fallback for _, _, fallback in parts), None)]
+    calls: list[tuple[str, str | None]] = []
+    for i, (lang, text, _) in enumerate(parts):
+        if lang == "ar":
+            calls.append((text, "ar"))
+            continue
+        followed_by_term = i + 1 < len(parts) and parts[i + 1][0] == "ar"
+        if followed_by_term and text[-1] not in ".!?,;:…":
+            text += ","
+        calls.append((text, None))
+    return calls
 
 
 class JobProcessor:
@@ -105,15 +126,17 @@ class JobProcessor:
                         builder.add_silence(silence_ms, s["text"], s["source"])
                     pending_silences.clear()
                 continue
-            t0 = time.monotonic()
-            audio, sr = self.manager.run(engine, lambda e, text=item["text"]: e.synthesize(text, voice))
-            synth_seconds += time.monotonic() - t0
-            if builder is None:
-                builder = AudioBuilder(sample_rate=sr, crossfade_ms=crossfade)
-                for s in pending_silences:  # script starts with an ayat block
-                    builder.add_silence(silence_ms, s["text"], s["source"])
-                pending_silences.clear()
-            builder.add_speech(audio, sr)
+            for text, language in render_calls(item["parts"], engine):
+                spec = replace(voice, language=language) if language else voice
+                t0 = time.monotonic()
+                audio, sr = self.manager.run(engine, lambda e, t=text, v=spec: e.synthesize(t, v))
+                synth_seconds += time.monotonic() - t0
+                if builder is None:
+                    builder = AudioBuilder(sample_rate=sr, crossfade_ms=crossfade)
+                    for s in pending_silences:  # script starts with an ayat block
+                        builder.add_silence(silence_ms, s["text"], s["source"])
+                    pending_silences.clear()
+                builder.add_speech(audio, sr)
             done += 1
             progress(done / total)
 
@@ -130,6 +153,7 @@ class JobProcessor:
             "sample_rate": builder.sample_rate,
             "chunks": len(speech_items),
             "characters": sum(len(p["text"]) for p in speech_items),
+            "arabic_terms": sum(1 for p in speech_items for part in p["parts"] if part[0] == "ar"),
             "synth_seconds": round(synth_seconds, 2),
             "rtf": round(synth_seconds / builder.duration_s, 3) if builder.duration_s else None,
             "ayat_markers": [asdict(m) for m in builder.markers],

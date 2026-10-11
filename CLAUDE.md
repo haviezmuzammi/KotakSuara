@@ -5,9 +5,12 @@ KotakSuara (`yassalam-tts-id`) is an Indonesian TTS + voice-clone service for Ya
 work on the code through GitHub and cannot reach the running service directly. Read `README.md` first.
 
 ## Non-negotiable rules
-1. **Never synthesize Quran verses.** `[AYAT]...[/AYAT]` and Arabic-script spans must become silence with
-   timestamps (`app/text/segmenter.py`). Do not weaken this, add a bypass flag, or "improve" it by reading
-   transliterations of verses aloud.
+1. **Never synthesize Quran verses.** `[AYAT]...[/AYAT]` and Arabic-script spans typed into a script must become
+   silence with timestamps (`app/text/segmenter.py`). Do not weaken this, add a bypass flag, or read
+   transliterations of verses aloud. The only Arabic that is spoken comes from the curated `arabic_terms` list in
+   `config/lexicon.yaml` (names of Allah, honorifics, common dhikr), spoken with the engine's Arabic model.
+   Dhikr that are also Quranic phrases (basmalah, hamdalah, istirja') may be spoken — Yassalam decision
+   2026-10-11. Additions to `arabic_terms` must be reviewed by Yassalam's asatidzah; never add whole verses.
 2. **Voice cloning requires recorded consent.** Every profile needs `consent_by`, `consent_date`,
    `consent_evidence`. Never add a path that clones a voice without them. Never commit voice recordings,
    datasets, or reference audio of real people (they live in `data/` on the PC, which is git-ignored).

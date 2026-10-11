@@ -200,7 +200,8 @@ def test_tts_end_to_end_with_ayat_and_srt(client, fake_engine, settings):
     result = job["result"]
     spoken = " ".join(t for t, _ in fake_engine.calls)
     assert "قُلْ" not in spoken and "رَبَّنَا" not in spoken  # verses never reach the engine
-    assert "subhanahu wa ta'ala" in spoken and "sepuluh ribu rupiah" in spoken and "Hijriah" in spoken
+    assert "subhanahu wa ta'ala" in spoken and "sepuluh ribu rupiah" in spoken and "Hijriah" in spoken  # Latin fallback
+    assert all(voice.language is None for _, voice in fake_engine.calls)
     assert [m["source"] for m in result["ayat_markers"]] == ["tag", "arabic"]
     assert result["ayat_markers"][0]["end_s"] - result["ayat_markers"][0]["start_s"] == 1.0
     assert result["transcript"] == "halo dunia" and result["commercial_ok"] is True
@@ -385,3 +386,14 @@ def test_audio_as_mp3(client, fake_engine):
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and len(r.content) > 100
     assert client.get(f"/v1/jobs/{job['id']}/audio?format=mp3").status_code == 200  # cached
     assert client.get(f"/v1/jobs/{job['id']}/audio?format=flac").status_code == 422
+
+
+def test_arabic_capable_engine_gets_separate_arabic_calls(client, fake_engine):
+    from app.engines.base import EngineInfo
+
+    fake_engine.info = EngineInfo(**{**fake_engine.info.__dict__, "extra_languages": ("ar",)})
+    job = _wait_job(client, client.post("/v1/tts", json={"text": "Nabi SAW bersabda. Alhamdulillah."}).json()["job_id"])
+    assert job["status"] == "done" and job["result"]["arabic_terms"] == 2
+    calls = [(text, voice.language) for text, voice in fake_engine.calls]
+    assert calls == [("Nabi,", None), ("صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ", "ar"), ("bersabda.", None),
+                     ("الْحَمْدُ لِلَّهِ.", "ar")]

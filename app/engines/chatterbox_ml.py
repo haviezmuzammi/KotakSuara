@@ -21,6 +21,7 @@ class ChatterboxMLEngine(TTSEngine):
         commercial_ok=True,
         vram_mb=3500,
         supports_clone=True,
+        extra_languages=("ar",),
         notes="Zero-shot clone from a consented reference clip (5-15 s, clean speech).",
     )
     language_id = "ms"
@@ -64,5 +65,5 @@ class ChatterboxMLEngine(TTSEngine):
             torch.manual_seed(int(voice.params["seed"]))
         self._select_voice(voice.reference_path, params.get("exaggeration", 0.5))
         with torch.inference_mode():
-            wav = self._model.generate(text, language_id=self.language_id, **params)
+            wav = self._model.generate(text, language_id=voice.language or self.language_id, **params)
         return wav.squeeze(0).detach().cpu().numpy().astype(np.float32), int(self._model.sr)
