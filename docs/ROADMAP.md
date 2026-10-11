@@ -24,7 +24,7 @@ ingin kualitas maksimal, tambahkan LoRA khusus dia (≥ 1 jam data).
 
 | Tahap | Isi | Target |
 |---|---|---|
-| B1 Data | Naskah rekaman (kalimat beragam fonem Indonesia + istilah kajian), dibaca tiap narator; WAV ≥ 22 kHz mono, ruang senyap; **persetujuan tertulis/lisan per narator** | 30 menit minimal per narator, total 2–5 jam |
+| B1 Data | Naskah rekaman di `training/naskah/` (203 kalimat: Asmaul Husna, gelar nabi/sahabat/ulama, serapan Arab, dzikir, kalimat kajian) (kalimat beragam fonem Indonesia + istilah kajian), dibaca tiap narator; WAV ≥ 22 kHz mono, ruang senyap; **persetujuan tertulis/lisan per narator** | 30 menit minimal per narator, total 2–5 jam |
 | B2 Persiapan | Potong per kalimat 3–10 dtk (VAD), transkrip Whisper + `normalizer_id`, cek manual; format LJSpeech `file|teks|teks_normal` | data tidak pernah masuk repo publik |
 | B3 Latih | LoRA Chatterbox Multilingual (toolkit kandidat di bawah), mulai dari bahasa `ms` | beberapa jam GPU |
 | B4 Evaluasi | WER (Whisper) vs teks, uji dengar tim (A/B dengan model dasar), cek ayat tetap jeda | WER turun, tim lebih suka |
@@ -50,8 +50,9 @@ selesai; unduh hanya bobot LoRA hasil latihan.
 
 ## C. Akses untuk agen Claude di cloud
 
-### C1. Antrean job lewat GitHub (direncanakan, utama)
-- Repo **privat** `KotakSuara-jobs`. Agen menulis `jobs/<id>.json` (`text`, `engine`, `profile`), commit/PR.
+### C1. Antrean job lewat GitHub — AKTIF sejak 2026-10-11
+- Repo **privat** [`mmymedia-lab/KotakSuara-jobs`](https://github.com/mmymedia-lab/KotakSuara-jobs) — format job & hasil ada di README repo itu.
+- Agen menulis `jobs/<id>.json` (`text`, `engine`, `profile`, `with_srt`) lalu commit ke `main`.
 - Poller di server (layanan systemd seperti bot) cek tiap ±30 dtk → WoL bila perlu → `/v1/tts` → unggah
   MP3 + SRT sebagai rilis/berkas di repo privat → tulis `results/<id>.json`.
 - Tidak ada port terbuka ke internet; hak akses = izin GitHub; jejak audit otomatis. Latensi ±1–2 menit + waktu proses.

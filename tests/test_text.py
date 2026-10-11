@@ -158,3 +158,20 @@ def test_lexicon_deleted_after_load_keeps_data(tmp_path):
     path.unlink()
     assert lexicon.get().symbols == {"@": "di"}
     assert lexicon.last_error
+
+
+def test_new_honorific_abbreviations(lex):
+    assert normalize("Nabi Ibrahim a.s. dan Abu Bakar r.a.", lex) == \
+        "Nabi Ibrahim 'alaihissalam dan Abu Bakar radhiyallahu 'anhu."
+    assert normalize("Layanan KotakSuara siap.", lex) == "Layanan Kotak Suara siap."
+
+
+def test_recording_script_is_clean():
+    import csv
+    import re
+
+    rows = list(csv.DictReader((REPO_ROOT / "training" / "naskah" / "naskah_id.tsv").open(encoding="utf-8"),
+                               delimiter="\t"))
+    assert len(rows) >= 200
+    assert len({r["id"] for r in rows}) == len(rows)
+    assert not any(re.search(r"[\u0600-\u06FF]", r["teks"]) for r in rows)  # no Arabic script / verses
