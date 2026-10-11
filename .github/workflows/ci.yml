@@ -1,0 +1,24 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test dependencies (no GPU models; versions pinned by req-main.txt)
+        run: |
+          uv venv --python 3.11
+          sed -E 's/\+cu[0-9]+//' req-main.txt > /tmp/constraints.txt
+          uv pip install -c /tmp/constraints.txt numpy soundfile fastapi "uvicorn[standard]" httpx pyyaml \
+            python-dotenv python-multipart pytest pytest-cov
+      - name: Run tests
+        run: uv run --no-project pytest --cov=app --cov-report=term-missing --cov-fail-under=80
