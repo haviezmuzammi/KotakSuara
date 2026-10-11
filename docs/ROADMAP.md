@@ -17,8 +17,10 @@ Catatan: klon zero-shot meniru **warna suara**; logat masih condong Melayu (mode
 
 ### A2. Istilah Arab dibaca dengan model Arab — SELESAI (2026-10-11)
 `arabic_terms` di `config/lexicon.yaml` (94 entri: Asmaul Husna, gelar nabi/sahabat/ulama, dzikir & salam).
-Istilah dalam ejaan Latin (mis. "Ar-Rahman", "SAW", "r.a.", "insya Allah") diucapkan oleh Chatterbox `ar` dengan
-suara/klon yang sama; teks Indonesia di sekitarnya tetap `ms`. Hasil A/B: versi Arab dinilai lebih baik.
+Kalimat yang **seluruhnya** istilah Arab ("Assalamu'alaikum …", "Bismillah.", "Wallahu a'lam.") diucapkan oleh
+Chatterbox `ar` dengan suara/klon yang sama. Istilah di tengah kalimat Indonesia dibaca utuh dengan ejaan Latin:
+memotong kalimat menjadi potongan ms/ar pendek membuat model berbicara lambat dan janggal (diukur: "rahimahullah"
+3,3 dtk), sehingga dibatalkan (2026-10-11). Matikan per permintaan dengan `"arabic_terms": false`.
 Tulisan Arab yang diketik di naskah tetap menjadi jeda (kebijakan ayat).
 
 ### A3. `/rekam_istilah` lewat bot — TERTUNDA (referensi)

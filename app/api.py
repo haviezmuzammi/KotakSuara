@@ -29,6 +29,7 @@ class TTSRequest(BaseModel):
     ayat_silence_ms: int | None = Field(default=None, ge=0, le=60000)
     crossfade_ms: int | None = Field(default=None, ge=0, le=200)
     with_srt: bool = False
+    arabic_terms: bool | None = None  # None = server default (ARABIC_TERMS)
 
     @field_validator("profile_id")
     @classmethod

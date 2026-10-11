@@ -388,12 +388,40 @@ def test_audio_as_mp3(client, fake_engine):
     assert client.get(f"/v1/jobs/{job['id']}/audio?format=flac").status_code == 422
 
 
-def test_arabic_capable_engine_gets_separate_arabic_calls(client, fake_engine):
+def test_arabic_capable_engine_speaks_only_whole_arabic_sentences_in_arabic(client, fake_engine):
     from app.engines.base import EngineInfo
 
     fake_engine.info = EngineInfo(**{**fake_engine.info.__dict__, "extra_languages": ("ar",)})
-    job = _wait_job(client, client.post("/v1/tts", json={"text": "Nabi SAW bersabda. Alhamdulillah."}).json()["job_id"])
-    assert job["status"] == "done" and job["result"]["arabic_terms"] == 2
-    calls = [(text, voice.language) for text, voice in fake_engine.calls]
-    assert calls == [("Nabi,", None), ("صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ", "ar"), ("bersabda.", None),
+    text = "Assalamu'alaikum. Bismillah. Nabi SAW bersabda. Kita belajar. Alhamdulillah."
+    job = _wait_job(client, client.post("/v1/tts", json={"text": text}).json()["job_id"])
+    assert job["status"] == "done" and job["result"]["arabic_sentences"] == 2
+    calls = [(t, v.language) for t, v in fake_engine.calls]
+    assert calls == [("السَّلَامُ عَلَيْكُمْ. بِسْمِ اللهِ.", "ar"),
+                     ("Nabi shallallahu 'alaihi wa sallam bersabda. Kita belajar.", None),
                      ("الْحَمْدُ لِلَّهِ.", "ar")]
+
+
+def test_arabic_terms_can_be_switched_off_per_request(client, fake_engine):
+    from app.engines.base import EngineInfo
+
+    fake_engine.info = EngineInfo(**{**fake_engine.info.__dict__, "extra_languages": ("ar",)})
+    body = {"text": "Nabi SAW bersabda.", "arabic_terms": False}
+    job = _wait_job(client, client.post("/v1/tts", json=body).json()["job_id"])
+    assert job["status"] == "done" and job["result"]["arabic_sentences"] == 0
+    assert [(t, v.language) for t, v in fake_engine.calls] == [("Nabi shallallahu 'alaihi wa sallam bersabda.", None)]
+
+
+def test_trim_silence_and_gap():
+    from app.audio import trim_silence
+
+    sr = 1000
+    audio = np.concatenate([np.zeros(300), 0.5 * np.ones(200), np.zeros(400)]).astype(np.float32)
+    trimmed = trim_silence(audio, sr, keep_ms=20)
+    assert 200 <= trimmed.size <= 240 and trimmed.max() == 0.5
+    assert trim_silence(np.zeros(100, dtype=np.float32), sr).size == 100  # all silent: unchanged
+    assert trim_silence(np.zeros(0, dtype=np.float32), sr).size == 0
+    b = AudioBuilder(sample_rate=sr, crossfade_ms=100)
+    b.add_speech(np.ones(500), sr)
+    b.add_gap(90)
+    b.add_speech(np.ones(500), sr, crossfade=False)
+    assert b.build().size == 1090

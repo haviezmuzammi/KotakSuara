@@ -9,7 +9,7 @@ from typing import Callable
 
 import soundfile as sf
 
-from app.audio import AudioBuilder
+from app.audio import AudioBuilder, trim_silence
 from app.config import Settings
 from app.db import Database
 from app.engines.base import TTSEngine, VoiceSpec
@@ -41,24 +41,36 @@ def plan_script(text: str, lexicon: Lexicon, max_chunk_chars: int) -> list[dict]
     return plan
 
 
-def render_calls(parts: list[tuple[str, str, str]], engine: TTSEngine) -> list[tuple[str, str | None]]:
+PART_GAP_MS = 150  # pause between an Arabic sentence and the Indonesian text around it
+_SENTENCE_END = (".", "!", "?", "…")
+
+
+def render_calls(parts: list[tuple[str, str, str]], engine: TTSEngine,
+                 arabic: bool = True) -> list[tuple[str, str | None]]:
     """Turn language parts into engine calls [(text, language)].
 
-    Engines that can speak Arabic get separate calls for curated Arabic terms; Indonesian text right before a
-    term ends with a comma so the voice keeps a continuing (not sentence-final) intonation. Other engines get
-    one call with the Latin spellings.
+    Chatterbox speaks very short inputs slowly and unnaturally, so sentences are never cut into pieces: a
+    sentence made only of curated Arabic terms ("Bismillah.", "Wallahu a'lam.") is spoken with the Arabic
+    model; any sentence that mixes Indonesian and terms is spoken whole with the Latin spellings.
+    Consecutive Indonesian sentences stay in one call.
     """
-    if "ar" not in engine.info.extra_languages:
+    if not arabic or "ar" not in engine.info.extra_languages:
         return [(" ".join(fallback for _, _, fallback in parts), None)]
+    sentences: list[list[tuple[str, str, str]]] = [[]]
+    for part in parts:
+        sentences[-1].append(part)
+        if part[1].rstrip().endswith(_SENTENCE_END):
+            sentences.append([])
     calls: list[tuple[str, str | None]] = []
-    for i, (lang, text, _) in enumerate(parts):
-        if lang == "ar":
-            calls.append((text, "ar"))
-            continue
-        followed_by_term = i + 1 < len(parts) and parts[i + 1][0] == "ar"
-        if followed_by_term and text[-1] not in ".!?,;:…":
-            text += ","
-        calls.append((text, None))
+    for sentence in filter(None, sentences):
+        if all(lang == "ar" for lang, _, _ in sentence):
+            call = (" ".join(text for _, text, _ in sentence), "ar")
+        else:
+            call = (" ".join(fallback for _, _, fallback in sentence), None)
+        if calls and calls[-1][1] == call[1]:
+            calls[-1] = (calls[-1][0] + " " + call[0], call[1])  # merge same-language neighbours
+        else:
+            calls.append(call)
     return calls
 
 
@@ -111,10 +123,12 @@ class JobProcessor:
             raise JobError("nothing to synthesize after removing ayat blocks")
 
         crossfade = _pick(request.get("crossfade_ms"), self.settings.crossfade_ms)
+        arabic = self.settings.arabic_terms if request.get("arabic_terms") is None else bool(request["arabic_terms"])
         silence_ms = _pick(request.get("ayat_silence_ms"), self.settings.ayat_silence_ms)
         builder: AudioBuilder | None = None
         pending_silences: list[dict] = []
         synth_seconds = 0.0
+        arabic_calls = 0
         done = 0
         total = len(speech_items) + (1 if request.get("with_srt") else 0)
 
@@ -126,7 +140,9 @@ class JobProcessor:
                         builder.add_silence(silence_ms, s["text"], s["source"])
                     pending_silences.clear()
                 continue
-            for text, language in render_calls(item["parts"], engine):
+            calls = render_calls(item["parts"], engine, arabic)
+            arabic_calls += sum(1 for _, language in calls if language == "ar")
+            for n, (text, language) in enumerate(calls):
                 spec = replace(voice, language=language) if language else voice
                 t0 = time.monotonic()
                 audio, sr = self.manager.run(engine, lambda e, t=text, v=spec: e.synthesize(t, v))
@@ -136,7 +152,14 @@ class JobProcessor:
                     for s in pending_silences:  # script starts with an ayat block
                         builder.add_silence(silence_ms, s["text"], s["source"])
                     pending_silences.clear()
-                builder.add_speech(audio, sr)
+                if len(calls) == 1:
+                    builder.add_speech(audio, sr)
+                    continue
+                # parts of one sentence: trim engine padding and join with a short, even pause
+                audio = trim_silence(audio, sr)
+                if n > 0:
+                    builder.add_gap(PART_GAP_MS)
+                builder.add_speech(audio, sr, crossfade=n == 0)
             done += 1
             progress(done / total)
 
@@ -153,7 +176,7 @@ class JobProcessor:
             "sample_rate": builder.sample_rate,
             "chunks": len(speech_items),
             "characters": sum(len(p["text"]) for p in speech_items),
-            "arabic_terms": sum(1 for p in speech_items for part in p["parts"] if part[0] == "ar"),
+            "arabic_sentences": arabic_calls,
             "synth_seconds": round(synth_seconds, 2),
             "rtf": round(synth_seconds / builder.duration_s, 3) if builder.duration_s else None,
             "ayat_markers": [asdict(m) for m in builder.markers],

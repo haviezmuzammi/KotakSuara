@@ -32,6 +32,7 @@ class Settings:
     stuck_job_seconds: int = 900
     enable_unofficial_engines: bool = True
     allowed_clients: tuple[str, ...] = ("127.0.0.1", "::1", "192.168.1.60")
+    arabic_terms: bool = True
     extra: dict = field(default_factory=dict)
 
     @property
@@ -86,6 +87,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_text_chars=int(get("MAX_TEXT_CHARS", "40000")),
         stuck_job_seconds=int(get("STUCK_JOB_SECONDS", "900")),
         enable_unofficial_engines=_bool(get("ENABLE_UNOFFICIAL_ENGINES", "true")),
+        arabic_terms=_bool(get("ARABIC_TERMS", "true")),
         allowed_clients=tuple(a.strip() for a in get("ALLOWED_CLIENTS", "127.0.0.1,::1,192.168.1.60").split(",")
                               if a.strip()),
     )
