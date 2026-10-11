@@ -22,6 +22,8 @@ class Settings:
     port: int = 8780
     data_dir: Path = REPO_ROOT / "data"
     lexicon_path: Path = REPO_ROOT / "config" / "lexicon.yaml"
+    styles_path: Path = REPO_ROOT / "config" / "styles.yaml"
+    ffmpeg_path: str = ""  # empty = ffmpeg from PATH; only needed for styles with an "fx" chain
     default_engine: str = "chatterbox_ml"
     stt_model: str = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
     max_loaded_models: int = 1
@@ -78,6 +80,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         port=int(get("PORT", "8780")),
         data_dir=Path(get("DATA_DIR", str(REPO_ROOT / "data"))),
         lexicon_path=Path(get("LEXICON_PATH", str(REPO_ROOT / "config" / "lexicon.yaml"))),
+        styles_path=Path(get("STYLES_PATH", str(REPO_ROOT / "config" / "styles.yaml"))),
+        ffmpeg_path=get("FFMPEG_PATH"),
         default_engine=get("DEFAULT_ENGINE", "chatterbox_ml"),
         stt_model=get("STT_MODEL", "mobiuslabsgmbh/faster-whisper-large-v3-turbo"),
         max_loaded_models=int(get("MAX_LOADED_MODELS", "1")),

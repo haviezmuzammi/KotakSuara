@@ -456,3 +456,90 @@ def test_arabic_term_preview(client, fake_engine, service):
     assert [(t, v.language) for t, v in fake_engine.calls] == [("بِسْمِ اللهِ.", "ar")]
     assert client.post("/v1/tts", json={"text": "x", "preview_arabic_term": "bukan istilah"}).status_code == 422
     assert client.post("/v1/tts", json={"text": "x", "engine": "nc", "preview_arabic_term": "Bismillah"}).status_code == 422
+
+
+# reading styles ---------------------------------------------------------------
+def _write_styles(settings, text):
+    import os
+
+    settings.styles_path.write_text(text, encoding="utf-8")
+    t = time.time() + 1
+    os.utime(settings.styles_path, (t, t))  # same-second edits must still count as a change
+
+
+def test_styles_listing_and_validation(client):
+    styles = {s["name"]: s for s in client.get("/v1/styles").json()}
+    assert {"netral", "dokumenter", "sedih", "bahagia", "horor", "liputan"} <= set(styles)
+    assert styles["sedih"]["params"]["exaggeration"] == 0.3 and styles["sedih"]["gap_ms"] == 600
+    assert styles["horor"]["fx"] and styles["netral"]["params"] == {}
+    r = client.post("/v1/tts", json={"text": "Halo.", "style": "jazz"})
+    assert r.status_code == 422 and "/v1/styles" in r.json()["detail"]
+    assert client.get("/health").json()["styles_error"] is None
+
+
+def test_style_params_gaps_and_request_override(client, fake_engine):
+    text = "Kalimat pertama yang cukup panjang. " * 12  # several chunks
+    r = client.post("/v1/tts", json={"text": text, "style": "Sedih", "params": {"temperature": 0.5}})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    voices = [v for _, v in fake_engine.calls]
+    assert len(voices) >= 2
+    assert voices[0].params == {"exaggeration": 0.3, "cfg_weight": 0.3, "temperature": 0.5}  # request wins
+    result = job["result"]
+    assert result["style"] == "sedih" and result["fx_applied"] is False
+    spoken = sum(len(t) * 10 for t, _ in fake_engine.calls)  # FakeEngine: 10 samples per character
+    gaps = (len(voices) - 1) * 600  # 600 ms at 1000 Hz = 600 samples between chunks
+    assert round(result["duration_s"] * 1000) == spoken + gaps
+
+
+def test_style_fx_runs_ffmpeg_and_rescales_markers(client, fake_engine, settings):
+    import shutil
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not installed")
+    _write_styles(settings, "styles:\n  lambat:\n    label: Lambat\n    fx: atempo=0.5\n")
+    r = client.post("/v1/tts", json={"text": "Pembuka. [AYAT]ayat[/AYAT] Penutup.", "style": "lambat"})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    result = job["result"]
+    assert result["fx_applied"] is True
+    spoken = sum(len(t) * 10 for t, _ in fake_engine.calls)
+    assert abs(result["duration_s"] - (spoken + 1000) / 1000 * 2) < 0.1  # half speed doubles the length
+    marker = result["ayat_markers"][0]
+    assert abs((marker["end_s"] - marker["start_s"]) - 2.0) < 0.05  # 1 s ayat pause, stretched with the audio
+
+
+def test_style_fx_failure_and_missing_ffmpeg(client, settings, monkeypatch):
+    import shutil
+
+    _write_styles(settings, "styles:\n  rusak:\n    label: Rusak\n    fx: bukan_filter=1\n")
+    if shutil.which("ffmpeg"):
+        job = _wait_job(client, client.post("/v1/tts", json={"text": "Halo.", "style": "rusak"}).json()["job_id"])
+        assert job["status"] == "failed" and "effect failed" in job["error"]
+    monkeypatch.setattr("app.jobs.find_ffmpeg", lambda configured: None)
+    job = _wait_job(client, client.post("/v1/tts", json={"text": "Halo.", "style": "rusak"}).json()["job_id"])
+    assert job["status"] == "failed" and "FFMPEG_PATH" in job["error"]
+
+
+def test_styles_file_validation_keeps_last_good(tmp_path):
+    from app.styles import Styles, apply_fx, EffectError, find_ffmpeg, parse_styles
+
+    for bad in ("styles: {}", "styles:\n  Jazz: {}", "styles:\n  a1:\n    params: {speed: 1}",
+                "styles:\n  a1:\n    params: {temperature: x}", "styles:\n  a1:\n    gap_ms: -1",
+                "styles:\n  a1:\n    fx: ''", "styles:\n  a1: [1]", "- 1"):
+        with pytest.raises(ValueError):
+            parse_styles(bad)
+    path = tmp_path / "styles.yaml"
+    path.write_text("styles:\n  ok1:\n    label: Ok\n", encoding="utf-8")
+    styles = Styles(path)
+    assert styles.get(" OK1 ").label == "Ok"
+    path.write_text("styles: [", encoding="utf-8")
+    import os
+    os.utime(path, (time.time() + 5, time.time() + 5))
+    assert "ok1" in styles.all() and styles.last_error  # invalid edit rejected, previous kept
+    with pytest.raises(FileNotFoundError):
+        Styles(tmp_path / "missing.yaml")
+    assert find_ffmpeg(str(tmp_path / "nope.exe")) is None
+    assert find_ffmpeg(str(path)) == str(path)
+    with pytest.raises(EffectError):
+        apply_fx(np.zeros(10, dtype=np.float32), 1000, "anull", str(tmp_path / "nope.exe"))

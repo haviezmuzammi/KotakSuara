@@ -28,6 +28,10 @@ class AudioBuilder:
     def duration_s(self) -> float:
         return self._length / self.sample_rate
 
+    @property
+    def ends_with_speech(self) -> bool:
+        return self._last_was_speech
+
     def add_gap(self, ms: int) -> None:
         """Short pause between parts of one sentence (no marker, keeps the next speech from crossfading)."""
         samples = int(self.sample_rate * ms / 1000)

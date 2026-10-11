@@ -31,6 +31,7 @@ class TTSRequest(BaseModel):
     with_srt: bool = False
     arabic_terms: bool | None = None  # None = server default (ARABIC_TERMS)
     preview_arabic_term: str | None = Field(default=None, max_length=120)  # speak one curated term in Arabic
+    style: str | None = Field(default=None, max_length=40)  # reading style from config/styles.yaml
 
     @field_validator("profile_id")
     @classmethod
@@ -87,6 +88,7 @@ def health(request: Request) -> dict:
         "loaded_models": svc.manager.loaded,
         "device": svc.manager.preferred_device,
         "lexicon_error": svc.lexicon.last_error,
+        "styles_error": svc.styles.last_error,
     }
 
 
@@ -97,6 +99,11 @@ def engines(request: Request) -> list[dict]:
         ok, reason = engine.available()
         out.append({**engine.info.as_dict(), "available": ok, "unavailable_reason": reason or None})
     return out
+
+
+@router.get("/v1/styles")
+def styles(request: Request) -> list[dict]:
+    return [s.as_dict() for s in _state(request).styles.all().values()]
 
 
 @router.post("/v1/tts", status_code=202)
@@ -123,6 +130,11 @@ def submit_tts(body: TTSRequest, request: Request) -> dict:
         raise HTTPException(422, str(exc)) from None
     if not any(s.kind == "speech" for s in segments):
         raise HTTPException(422, "nothing to synthesize: text only contains ayat/Arabic blocks")
+    if body.style is not None:
+        style = svc.styles.get(body.style)
+        if style is None:
+            raise HTTPException(422, f"unknown style {body.style!r}; see GET /v1/styles")
+        body.style = style.name
     if body.profile_id:
         profile = svc.db.get_profile(body.profile_id)
         if profile is None:

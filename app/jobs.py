@@ -15,6 +15,7 @@ from app.db import Database
 from app.engines.base import TTSEngine, VoiceSpec
 from app.engines.model_manager import ModelManager
 from app.stt.whisper import WhisperSTT, to_srt
+from app.styles import EffectError, Style, Styles, apply_fx, find_ffmpeg
 from app.text.chunker import chunk_text
 from app.text.lexicon import Lexicon
 from app.text.normalizer_id import apply_symbols, display_text, normalize, split_language_parts
@@ -76,13 +77,14 @@ def render_calls(parts: list[tuple[str, str, str]], engine: TTSEngine,
 
 class JobProcessor:
     def __init__(self, settings: Settings, db: Database, engines: dict[str, TTSEngine],
-                 manager: ModelManager, stt: WhisperSTT, lexicon: Lexicon):
+                 manager: ModelManager, stt: WhisperSTT, lexicon: Lexicon, styles: Styles | None = None):
         self.settings = settings
         self.db = db
         self.engines = engines
         self.manager = manager
         self.stt = stt
         self.lexicon = lexicon
+        self.styles = styles
 
     def job_dir(self, job_id: str) -> Path:
         path = self.settings.jobs_dir / job_id
@@ -97,7 +99,15 @@ class JobProcessor:
             return self._transcribe(job, progress)
         raise JobError(f"unknown job kind {job['kind']!r}")
 
-    def _voice(self, request: dict, engine: TTSEngine) -> VoiceSpec:
+    def _style(self, request: dict) -> Style | None:
+        if not request.get("style"):
+            return None
+        style = self.styles.get(request["style"]) if self.styles else None
+        if style is None:
+            raise JobError(f"unknown style {request['style']!r}")
+        return style
+
+    def _voice(self, request: dict, engine: TTSEngine, style: Style | None = None) -> VoiceSpec:
         reference = None
         if request.get("profile_id"):
             profile = self.db.get_profile(request["profile_id"])
@@ -106,7 +116,8 @@ class JobProcessor:
             if profile["engine"] != engine.info.name:
                 raise JobError(f"profile belongs to engine {profile['engine']!r}")
             reference = Path(profile["reference_path"])
-        return VoiceSpec(voice=request.get("voice"), reference_path=reference, params=request.get("params") or {})
+        params = {**(style.params if style else {}), **(request.get("params") or {})}  # request params win
+        return VoiceSpec(voice=request.get("voice"), reference_path=reference, params=params)
 
     def _tts(self, job: dict, progress: Callable[[float], None]) -> dict:
         request = job["request"]
@@ -116,7 +127,8 @@ class JobProcessor:
         ok, reason = engine.available()
         if not ok:
             raise JobError(reason)
-        voice = self._voice(request, engine)
+        style = self._style(request)
+        voice = self._voice(request, engine, style)
         if request.get("preview_arabic_term"):
             plan = self._arabic_preview_plan(request["preview_arabic_term"])
         else:
@@ -128,6 +140,7 @@ class JobProcessor:
         crossfade = _pick(request.get("crossfade_ms"), self.settings.crossfade_ms)
         arabic = self.settings.arabic_terms if request.get("arabic_terms") is None else bool(request["arabic_terms"])
         silence_ms = _pick(request.get("ayat_silence_ms"), self.settings.ayat_silence_ms)
+        gap_ms = style.gap_ms if style else None
         builder: AudioBuilder | None = None
         pending_silences: list[dict] = []
         synth_seconds = 0.0
@@ -155,6 +168,13 @@ class JobProcessor:
                     for s in pending_silences:  # script starts with an ayat block
                         builder.add_silence(silence_ms, s["text"], s["source"])
                     pending_silences.clear()
+                if gap_ms is not None:
+                    # styled pacing: even, deliberate pauses instead of crossfading chunks together
+                    audio = trim_silence(audio, sr)
+                    if builder.ends_with_speech:  # an ayat pause already separates the chunks
+                        builder.add_gap(PART_GAP_MS if n > 0 else gap_ms)
+                    builder.add_speech(audio, sr, crossfade=False)
+                    continue
                 if len(calls) == 1:
                     builder.add_speech(audio, sr)
                     continue
@@ -169,20 +189,29 @@ class JobProcessor:
         assert builder is not None
         out_dir = self.job_dir(job["id"])
         audio_path = out_dir / "audio.wav"
-        sf.write(audio_path, builder.build(), builder.sample_rate, subtype="PCM_16")
+        audio = builder.build()
+        markers = [asdict(m) for m in builder.markers]
+        fx_applied = False
+        if style and style.fx:
+            audio, markers = self._apply_style_fx(audio, builder.sample_rate, style, markers)
+            fx_applied = True
+        sf.write(audio_path, audio, builder.sample_rate, subtype="PCM_16")
+        duration_s = len(audio) / builder.sample_rate
 
         result = {
             "engine": engine.info.name,
             "commercial_ok": engine.info.commercial_ok,
             "unofficial": engine.info.unofficial,
-            "duration_s": round(builder.duration_s, 2),
+            "style": style.name if style else None,
+            "fx_applied": fx_applied,
+            "duration_s": round(duration_s, 2),
             "sample_rate": builder.sample_rate,
             "chunks": len(speech_items),
             "characters": sum(len(p["text"]) for p in speech_items),
             "arabic_sentences": arabic_calls,
             "synth_seconds": round(synth_seconds, 2),
-            "rtf": round(synth_seconds / builder.duration_s, 3) if builder.duration_s else None,
-            "ayat_markers": [asdict(m) for m in builder.markers],
+            "rtf": round(synth_seconds / duration_s, 3) if duration_s else None,
+            "ayat_markers": markers,
             "devices": self.manager.loaded,
         }
         if request.get("with_srt"):
@@ -191,6 +220,20 @@ class JobProcessor:
             result["transcript"] = text
             progress(1.0)
         return result
+
+    def _apply_style_fx(self, audio, sample_rate: int, style: Style, markers: list[dict]):
+        ffmpeg = find_ffmpeg(self.settings.ffmpeg_path)
+        if ffmpeg is None:
+            raise JobError(f"style {style.name!r} needs ffmpeg for its audio effect (set FFMPEG_PATH)")
+        try:
+            out = apply_fx(audio, sample_rate, style.fx, ffmpeg)
+        except EffectError as exc:
+            raise JobError(f"style {style.name!r} effect failed: {exc}") from None
+        ratio = len(out) / len(audio) if len(audio) else 1.0
+        if abs(ratio - 1.0) > 0.001:  # tempo changed: keep ayat markers pointing at the right place
+            markers = [{**m, "start_s": round(m["start_s"] * ratio, 3), "end_s": round(m["end_s"] * ratio, 3)}
+                       for m in markers]
+        return out, markers
 
     def _arabic_preview_plan(self, term: str) -> list[dict]:
         """Pronunciation check: one curated term spoken in Arabic, whatever its current Latin/Arabic setting."""

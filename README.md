@@ -48,9 +48,10 @@ Requests are also limited to `ALLOWED_CLIENTS` (default: localhost + the n8n ser
 
 | method | path | |
 |---|---|---|
-| GET | `/health` | `busy`, `running_job`, `queue_length`, `loaded_models`, `lexicon_error` |
+| GET | `/health` | `busy`, `running_job`, `queue_length`, `loaded_models`, `lexicon_error`, `styles_error` |
 | GET | `/v1/engines` | engine info + availability |
-| POST | `/v1/tts` | JSON `{text, engine?, voice?, profile_id?, params?, ayat_silence_ms?, crossfade_ms?, with_srt?}` → 202 `{job_id, warnings}` |
+| GET | `/v1/styles` | reading styles per genre (`config/styles.yaml`) |
+| POST | `/v1/tts` | JSON `{text, engine?, voice?, profile_id?, style?, params?, ayat_silence_ms?, crossfade_ms?, with_srt?}` → 202 `{job_id, warnings}` |
 | GET | `/v1/jobs/{id}` | status, progress, result (`duration_s`, `rtf`, `ayat_markers`, `transcript`, ...) |
 | GET | `/v1/jobs/{id}/audio` | WAV (409 until done) |
 | GET | `/v1/jobs/{id}/srt` | SRT (with `with_srt` or transcribe jobs) |
@@ -60,6 +61,14 @@ Requests are also limited to `ALLOWED_CLIENTS` (default: localhost + the n8n ser
 `params` for Chatterbox: `exaggeration`, `cfg_weight`, `temperature`, `repetition_penalty`, `min_p`, `top_p`, `seed`.
 Azure: `rate`, `pitch` (SSML prosody). Jobs run one at a time; a job stuck longer than `STUCK_JOB_SECONDS`
 restarts the process (the service manager restarts it and the job is re-queued once).
+
+## Reading styles (genre)
+
+`style` picks a preset from `config/styles.yaml`: `netral`, `dokumenter`, `sedih`, `bahagia`, `horor`, `liputan`.
+A style sets Chatterbox `params` (the request's own `params` override them), an even pause between chunks
+(`gap_ms`) and optionally an ffmpeg filter chain (`fx`, e.g. echo for horor, field-radio EQ for liputan) applied to
+the finished narration; ayat markers are rescaled if the effect changes the tempo. Styles with `fx` need ffmpeg
+(`PATH` or `FFMPEG_PATH`). Hot-reloaded like the lexicon; errors show in `/health.styles_error`.
 
 ## Lexicon
 

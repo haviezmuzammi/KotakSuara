@@ -15,6 +15,7 @@ from app.engines.base import ManagedModel, TTSEngine
 from app.engines.model_manager import ModelManager
 from app.jobs import JobProcessor
 from app.power import PowerGuard
+from app.styles import Styles
 from app.text.lexicon import Lexicon
 from app.worker import JobWorker
 
@@ -26,6 +27,7 @@ class Service:
     engines: dict[str, TTSEngine]
     manager: ModelManager
     lexicon: Lexicon
+    styles: Styles
     worker: JobWorker
 
 
@@ -53,10 +55,11 @@ def build_service(settings: Settings, engines: dict[str, TTSEngine] | None = Non
     db = Database(settings.db_path)
     manager = manager or ModelManager(max_loaded=settings.max_loaded_models)
     lexicon = Lexicon(settings.lexicon_path, settings.data_dir / "lexicon.local.yaml")
-    processor = JobProcessor(settings, db, engines, manager, stt, lexicon)
+    styles = Styles(settings.styles_path)
+    processor = JobProcessor(settings, db, engines, manager, stt, lexicon, styles)
     worker = JobWorker(db, processor, power or PowerGuard(), stuck_seconds=settings.stuck_job_seconds,
                        **(worker_kwargs or {}))
-    return Service(settings, db, engines, manager, lexicon, worker)
+    return Service(settings, db, engines, manager, lexicon, styles, worker)
 
 
 def create_app(svc: Service) -> FastAPI:

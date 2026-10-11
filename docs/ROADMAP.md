@@ -29,6 +29,11 @@ bot memutar pratinjau, lalu ejaan dipakai di semua narasi (`PUT /v1/lexicon/pron
 `telegram-wol-bot/data/istilah/<user>/`, belum mengubah suara TTS) · Lewati · Selesai.
 `/hasil_pelafalan` merangkum (termasuk daftar ejaan isian); `/cek_pelafalan ulang` mengembalikan semua ke Latin.
 
+### A4. Gaya baca per genre — SELESAI (2026-10-12)
+`config/styles.yaml`: netral, dokumenter, sedih, bahagia, horor, liputan (setelan Chatterbox + jeda antar potongan +
+efek ffmpeg opsional). Dipilih lewat `style` di `POST /v1/tts`, `/narasi <gaya> <teks>` atau `/gaya` di bot,
+`"style"` di job C1. Setelan diuji dengar 2026-10-12 (default vs preset); ubah file untuk menyetel ulang.
+
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
 Pendekatan yang disarankan untuk **beberapa narator**: latih **satu adaptor LoRA "logat Indonesia"** dari
