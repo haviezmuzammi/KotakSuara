@@ -76,9 +76,10 @@ def split_language_parts(chunk: str, lex: LexiconData) -> list[tuple[str, str, s
 
     language is "id" or "ar"; fallback is the Latin spelling to use when the engine cannot speak Arabic.
     """
+    respell = {k.lower(): v for k, v in lex.pronunciations.items()}
     latin_for: dict[str, str] = {}
     for latin, arabic in lex.arabic_terms.items():
-        latin_for.setdefault(arabic.strip(), latin)
+        latin_for.setdefault(arabic.strip(), respell.get(latin.lower(), latin))  # user respelling wins
     parts: list[tuple[str, str, str]] = []
     pos = 0
     for m in ARABIC_MARK.finditer(chunk):

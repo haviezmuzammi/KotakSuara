@@ -227,3 +227,33 @@ def test_local_overrides_turn_arabic_terms_off(tmp_path):
     assert set(lexicon.get().arabic_terms) == {"Bismillah", "Alhamdulillah"} and lexicon.last_error
     with pytest.raises(RuntimeError):
         Lexicon(base).set_arabic_off(["Bismillah"])
+
+
+def test_local_respelling_overrides_reading(tmp_path):
+    base = tmp_path / "lex.yaml"
+    base.write_text('abbreviations:\n  SAW: "shallallahu \'alaihi wa sallam"\n'
+                    'arabic_terms:\n  "shallallahu \'alaihi wa sallam": "صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ"\n', encoding="utf-8")
+    local = tmp_path / "lexicon.local.yaml"
+    lexicon = Lexicon(base, local)
+    lexicon.set_arabic_off(["shallallahu 'alaihi wa sallam"])
+    lexicon.set_respelling("shallallahu 'alaihi wa sallam", "shollallohu 'alaihi wasallam")
+    later = time.time() + 5
+    os.utime(local, (later, later))
+    assert normalize("Nabi SAW bersabda.", lexicon.get()) == "Nabi shollallohu 'alaihi wasallam bersabda."
+    assert lexicon.all_arabic_terms()[0]["respelling"] == "shollallohu 'alaihi wasallam"
+    lexicon.set_respelling("SHALLALLAHU 'alaihi wa sallam", None)
+    os.utime(local, (later + 5, later + 5))
+    assert normalize("Nabi SAW bersabda.", lexicon.get()) == "Nabi shallallahu 'alaihi wa sallam bersabda."
+    assert lexicon.all_arabic_terms()[0]["enabled"] is False  # off-list kept when respellings change
+
+
+def test_respelling_used_as_latin_fallback_for_enabled_terms(tmp_path):
+    base = tmp_path / "lex.yaml"
+    base.write_text('arabic_terms:\n  "rahimahullah": "رَحِمَهُ اللهُ"\n', encoding="utf-8")
+    lexicon = Lexicon(base, tmp_path / "local.yaml")
+    lexicon.set_respelling("rahimahullah", "rohimahulloh")
+    later = time.time() + 5
+    os.utime(tmp_path / "local.yaml", (later, later))
+    lex = lexicon.get()
+    parts = split_language_parts(normalize("Imam Ahmad rahimahullah berkata.", lex), lex)
+    assert " ".join(p[2] for p in parts) == "Imam Ahmad rohimahulloh berkata."

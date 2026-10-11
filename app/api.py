@@ -151,6 +151,19 @@ def set_arabic_terms_off(body: ArabicOff, request: Request) -> dict:
     return {"off": [t["latin"] for t in terms if not t["enabled"]], "total": len(terms)}
 
 
+class Respelling(BaseModel):
+    term: str = Field(min_length=1, max_length=120)
+    respelling: str | None = Field(default=None, max_length=200)
+
+
+@router.put("/v1/lexicon/pronunciations")
+def set_pronunciation(body: Respelling, request: Request) -> dict:
+    lexicon = _state(request).lexicon
+    lexicon.set_respelling(body.term.strip(), body.respelling.strip() if body.respelling else None)
+    lexicon.get()
+    return {"term": body.term, "respelling": body.respelling}
+
+
 @router.get("/v1/jobs/{job_id}")
 def get_job(job_id: str, request: Request) -> dict:
     job = _state(request).db.get_job(job_id)

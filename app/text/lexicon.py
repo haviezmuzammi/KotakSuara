@@ -65,6 +65,7 @@ class Lexicon:
         self._base = LexiconData()
         self._data = LexiconData()
         self._off: frozenset[str] = frozenset()
+        self._local_pron: dict[str, str] = {}
         self._mtimes: tuple[float | None, float | None] = (None, None)
         self.last_error: str | None = None
         self.get()
@@ -94,10 +95,13 @@ class Lexicon:
                     self.last_error = str(exc)
                     log.error("lexicon rejected, keeping previous version: %s", exc)
             if local_m != self._mtimes[1]:
-                self._off = frozenset(t.lower() for t in self._read_local().get("arabic_terms_off", []))
+                local = self._read_local()
+                self._off = frozenset(t.lower() for t in local.get("arabic_terms_off", []))
+                self._local_pron = local.get("pronunciations", {})
             self._mtimes = (base_m, local_m)
             terms = {k: v for k, v in self._base.arabic_terms.items() if k.lower() not in self._off}
-            self._data = LexiconData(self._base.symbols, self._base.abbreviations, self._base.pronunciations,
+            pronunciations = {**self._base.pronunciations, **self._local_pron}  # local respellings win
+            self._data = LexiconData(self._base.symbols, self._base.abbreviations, pronunciations,
                                      terms, version=max(base_m, local_m or 0))
             return self._data
 
@@ -109,7 +113,8 @@ class Lexicon:
             off = raw.get("arabic_terms_off", [])
             if not isinstance(off, list) or not all(isinstance(t, str) for t in off):
                 raise ValueError("arabic_terms_off must be a list of strings")
-            return {"arabic_terms_off": off}
+            return {"arabic_terms_off": off,
+                    "pronunciations": _string_map(raw.get("pronunciations"), "pronunciations")}
         except (yaml.YAMLError, ValueError, AttributeError) as exc:
             self.last_error = f"local lexicon ignored: {exc}"
             log.error("local lexicon rejected: %s", exc)
@@ -118,19 +123,32 @@ class Lexicon:
     def all_arabic_terms(self) -> list[dict]:
         """Every curated term with its current state (for the pronunciation check)."""
         self.get()
-        return [{"latin": k, "arabic": v, "enabled": k.lower() not in self._off}
+        respell = {k.lower(): v for k, v in self._local_pron.items()}
+        return [{"latin": k, "arabic": v, "enabled": k.lower() not in self._off, "respelling": respell.get(k.lower())}
                 for k, v in self._base.arabic_terms.items()]
 
     def set_arabic_off(self, terms: list[str]) -> None:
+        known = {k.lower(): k for k in self._base.arabic_terms}
+        self._write_local(off=sorted({known[t.lower()] for t in terms if t.lower() in known}))
+
+    def set_respelling(self, term: str, respelling: str | None) -> None:
+        """Local pronunciation override: `term` is read as `respelling` (None removes it)."""
+        self.get()
+        pron = {k: v for k, v in self._local_pron.items() if k.lower() != term.lower()}
+        if respelling:
+            pron[term] = respelling
+        self._write_local(pronunciations=pron)
+
+    def _write_local(self, off: list[str] | None = None, pronunciations: dict[str, str] | None = None) -> None:
         if not self.local_path:
             raise RuntimeError("no local lexicon path configured")
-        known = {k.lower(): k for k in self._base.arabic_terms}
-        cleaned = sorted({known[t.lower()] for t in terms if t.lower() in known})
+        current = self._read_local()
+        data = {"arabic_terms_off": off if off is not None else current.get("arabic_terms_off", []),
+                "pronunciations": pronunciations if pronunciations is not None else current.get("pronunciations", {})}
         self.local_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.local_path.with_suffix(".tmp")
-        tmp.write_text("# Written by the KotakSuara API (Telegram /cek_pelafalan). Terms read in Latin, not Arabic.\n"
-                       + yaml.safe_dump({"arabic_terms_off": cleaned}, allow_unicode=True, sort_keys=False),
-                       encoding="utf-8")
+        tmp.write_text("# Written by the KotakSuara API (Telegram /cek_pelafalan): Latin readings and respellings.\n"
+                       + yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
         tmp.replace(self.local_path)
 
 

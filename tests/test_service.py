@@ -434,3 +434,12 @@ def test_arabic_terms_api(client, service):
     assert r.status_code == 200 and r.json()["off"] == ["Bismillah", "Wallahu a'lam"]
     assert "Bismillah" not in service.lexicon.get().arabic_terms
     assert client.put("/v1/lexicon/arabic-terms/off", json={"arabic_terms_off": []}).json()["off"] == []
+
+
+def test_pronunciation_api(client, service):
+    r = client.put("/v1/lexicon/pronunciations", json={"term": "Bismillah", "respelling": "Bismilah"})
+    assert r.status_code == 200
+    assert any(t["respelling"] == "Bismilah" for t in client.get("/v1/lexicon/arabic-terms").json())
+    assert client.put("/v1/lexicon/pronunciations", json={"term": "Bismillah", "respelling": None}).status_code == 200
+    assert all(t["respelling"] is None for t in client.get("/v1/lexicon/arabic-terms").json())
+    assert client.put("/v1/lexicon/pronunciations", json={"term": ""}).status_code == 422
