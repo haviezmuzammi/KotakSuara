@@ -1,0 +1,338 @@
+{
+  "id": "kotaksuaraNarasi1",
+  "name": "KotakSuara - Narasi (WoL, poll, unduh MP3)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Mulai",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "naskah",
+      "name": "Naskah",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Ganti teks naskah di sini. Ayat: [AYAT]...[/AYAT] (menjadi jeda).\nreturn [{ json: {\n  text: \"Bismillah. Ini uji workflow n8n untuk KotakSuara. Nabi Muhammad SAW adalah teladan terbaik. Insya Allah narasi ini selesai dengan baik. Wallahu a'lam.\",\n  with_srt: true,\n} }];"
+      }
+    },
+    {
+      "id": "kirim-naskah",
+      "name": "Kirim Naskah",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://suara.yassalam.id/v1/tts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $('Naskah').first().json.text, with_srt: $('Naskah').first().json.with_srt }) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kotaksuaraGw01",
+          "name": "KotakSuara Gateway"
+        }
+      }
+    },
+    {
+      "id": "diterima",
+      "name": "Diterima?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 202,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "tunggu-pc-bangun",
+      "name": "Tunggu PC Bangun",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// 503 = PC sedang dinyalakan lewat Wake-on-LAN oleh gateway.\nif ($json.statusCode !== 503) throw new Error(`Gateway HTTP ${$json.statusCode}: ${JSON.stringify($json.body)}`);\nawait new Promise(r => setTimeout(r, 60000));\nreturn [{ json: {} }];"
+      }
+    },
+    {
+      "id": "simpan-job-id",
+      "name": "Simpan Job ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        280
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { job_id: $json.body.job_id, warnings: $json.body.warnings } }];"
+      }
+    },
+    {
+      "id": "cek-status",
+      "name": "Cek Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://suara.yassalam.id/v1/jobs/{{ $('Simpan Job ID').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kotaksuaraGw01",
+          "name": "KotakSuara Gateway"
+        }
+      }
+    },
+    {
+      "id": "selesai",
+      "name": "Selesai?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        280
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "done",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "jeda-15-detik",
+      "name": "Jeda 15 detik",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        500
+      ],
+      "parameters": {
+        "jsCode": "if ($json.status === 'failed') throw new Error(`Narasi gagal: ${$json.error}`);\nawait new Promise(r => setTimeout(r, 15000));\nreturn [{ json: {} }];"
+      }
+    },
+    {
+      "id": "unduh-audio-mp3",
+      "name": "Unduh Audio MP3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://suara.yassalam.id/v1/jobs/{{ $('Simpan Job ID').first().json.job_id }}/audio?format=mp3",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kotaksuaraGw01",
+          "name": "KotakSuara Gateway"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Mulai": {
+      "main": [
+        [
+          {
+            "node": "Naskah",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Naskah": {
+      "main": [
+        [
+          {
+            "node": "Kirim Naskah",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kirim Naskah": {
+      "main": [
+        [
+          {
+            "node": "Diterima?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diterima?": {
+      "main": [
+        [
+          {
+            "node": "Simpan Job ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tunggu PC Bangun",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tunggu PC Bangun": {
+      "main": [
+        [
+          {
+            "node": "Kirim Naskah",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simpan Job ID": {
+      "main": [
+        [
+          {
+            "node": "Cek Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Status": {
+      "main": [
+        [
+          {
+            "node": "Selesai?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selesai?": {
+      "main": [
+        [
+          {
+            "node": "Unduh Audio MP3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Jeda 15 detik",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jeda 15 detik": {
+      "main": [
+        [
+          {
+            "node": "Cek Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
