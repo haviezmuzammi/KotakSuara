@@ -86,3 +86,8 @@ Dependencies are pinned in `req-main.txt` (compiled from `req-main.in`). Service
 .venv\Scripts\python.exe -m pytest --cov=app        # unit/API tests, mock engines, no GPU
 powershell -File scripts\live_run.ps1                # real models on 127.0.0.1:8781, temporary key
 ```
+
+## License
+
+Code: MIT (see `LICENSE`). Model weights keep their own licenses — see the engine table above;
+`mms_id` (CC-BY-NC) and `edge_id` (unofficial) output must not be used in monetized videos.
