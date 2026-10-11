@@ -15,20 +15,19 @@ Bot `@yassalam_monitor_bot` (repo terpisah di server) memakai API KotakSuara:
 Bot menyalakan PC lewat Wake-on-LAN bila layanan belum aktif.
 Catatan: klon zero-shot meniru **warna suara**; logat masih condong Melayu (model `ms`). Untuk logat Indonesia → B.
 
-### A2. Istilah Arab dibaca dengan model Arab — SELESAI (2026-10-11)
-`arabic_terms` di `config/lexicon.yaml` (94 entri: Asmaul Husna, gelar nabi/sahabat/ulama, dzikir & salam).
-Kalimat yang **seluruhnya** istilah Arab ("Assalamu'alaikum …", "Bismillah.", "Wallahu a'lam.") diucapkan oleh
-Chatterbox `ar` dengan suara/klon yang sama. Istilah di tengah kalimat Indonesia dibaca utuh dengan ejaan Latin:
-memotong kalimat menjadi potongan ms/ar pendek membuat model berbicara lambat dan janggal (diukur: "rahimahullah"
-3,3 dtk), sehingga dibatalkan (2026-10-11). Matikan per permintaan dengan `"arabic_terms": false`.
-Tulisan Arab yang diketik di naskah tetap menjadi jeda (kebijakan ayat).
+### A2. Istilah Arab — bacaan dipilih per istilah (2026-10-11)
+`arabic_terms` di `config/lexicon.yaml` (94 entri). Percobaan memotong kalimat menjadi potongan ms/ar membuat suara
+lambat dan janggal; aturan "kalimat Arab utuh saja" juga belum memuaskan pengguna. Maka **semua istilah dibaca
+Latin utuh secara bawaan**, dan pengguna memutuskan per istilah lewat bot (A3). Istilah yang disetujui "Arab"
+hanya dibaca Arab bila berdiri sebagai kalimat sendiri. Tulisan Arab di naskah tetap menjadi jeda.
 
-### A3. `/cek_pelafalan` lewat bot — SELESAI (2026-10-11)
-Bot mengirim tiap istilah `arabic_terms` dalam 2 versi (model Arab vs ejaan Latin) dengan suara aktif; pengguna
-memilih: **Arab benar** · **Latin lebih baik** (istilah dipindah ke bacaan Latin lewat
-`PUT /v1/lexicon/arabic-terms/off` → `data/lexicon.local.yaml`) · **Dua-duanya salah** (bot meminta voice note
-pelafalan yang benar, disimpan sebagai data latih B di server `telegram-wol-bot/data/istilah/<user>/`) ·
-Lewati · Selesai. `/hasil_pelafalan` merangkum; `/cek_pelafalan ulang` mereset.
+### A3. `/cek_pelafalan` lewat bot — SELESAI
+Tiap istilah dikirim dalam 2 versi dengan suara aktif: 1️⃣ model Arab (`preview_arabic_term`) dan 2️⃣ bacaan Latin.
+Pilihan: **Arab** · **Latin** · **✏️ Isi pelafalan** — ketik ejaan (mis. "shollallohu 'alaihi wasallam"),
+bot memutar pratinjau, lalu ejaan dipakai di semua narasi (`PUT /v1/lexicon/pronunciations`, disimpan di
+`data/lexicon.local.yaml`); atau kirim voice note (disimpan sebagai data latih di server
+`telegram-wol-bot/data/istilah/<user>/`, belum mengubah suara TTS) · Lewati · Selesai.
+`/hasil_pelafalan` merangkum (termasuk daftar ejaan isian); `/cek_pelafalan ulang` mengembalikan semua ke Latin.
 
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
