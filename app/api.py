@@ -30,6 +30,7 @@ class TTSRequest(BaseModel):
     crossfade_ms: int | None = Field(default=None, ge=0, le=200)
     with_srt: bool = False
     arabic_terms: bool | None = None  # None = server default (ARABIC_TERMS)
+    preview_arabic_term: str | None = Field(default=None, max_length=120)  # speak one curated term in Arabic
 
     @field_validator("profile_id")
     @classmethod
@@ -110,6 +111,12 @@ def submit_tts(body: TTSRequest, request: Request) -> dict:
         raise HTTPException(422, f"engine {engine_name!r} unavailable: {reason}")
     if len(body.text) > svc.settings.max_text_chars:
         raise HTTPException(422, f"text longer than {svc.settings.max_text_chars} characters")
+    if body.preview_arabic_term is not None:
+        curated = {t["latin"].lower() for t in svc.lexicon.all_arabic_terms()}
+        if body.preview_arabic_term.lower() not in curated:
+            raise HTTPException(422, "preview_arabic_term must be a curated arabic_terms entry")
+        if "ar" not in engine.info.extra_languages:
+            raise HTTPException(422, f"engine {engine_name!r} cannot speak Arabic")
     try:
         segments = split_segments(body.text)
     except AyatTagError as exc:

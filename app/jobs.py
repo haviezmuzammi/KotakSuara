@@ -117,7 +117,10 @@ class JobProcessor:
         if not ok:
             raise JobError(reason)
         voice = self._voice(request, engine)
-        plan = plan_script(request["text"], self.lexicon, self.settings.max_chunk_chars)
+        if request.get("preview_arabic_term"):
+            plan = self._arabic_preview_plan(request["preview_arabic_term"])
+        else:
+            plan = plan_script(request["text"], self.lexicon, self.settings.max_chunk_chars)
         speech_items = [p for p in plan if p["kind"] == "speech"]
         if not speech_items:
             raise JobError("nothing to synthesize after removing ayat blocks")
@@ -188,6 +191,14 @@ class JobProcessor:
             result["transcript"] = text
             progress(1.0)
         return result
+
+    def _arabic_preview_plan(self, term: str) -> list[dict]:
+        """Pronunciation check: one curated term spoken in Arabic, whatever its current Latin/Arabic setting."""
+        match = next((t for t in self.lexicon.all_arabic_terms() if t["latin"].lower() == term.lower()), None)
+        if match is None:
+            raise JobError("preview_arabic_term is not a curated term")
+        arabic = match["arabic"].strip() + "."
+        return [{"kind": "speech", "text": arabic, "parts": [("ar", arabic, match["latin"] + ".")]}]
 
     def _transcribe(self, job: dict, progress: Callable[[float], None]) -> dict:
         request = job["request"]

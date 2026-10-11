@@ -443,3 +443,16 @@ def test_pronunciation_api(client, service):
     assert client.put("/v1/lexicon/pronunciations", json={"term": "Bismillah", "respelling": None}).status_code == 200
     assert all(t["respelling"] is None for t in client.get("/v1/lexicon/arabic-terms").json())
     assert client.put("/v1/lexicon/pronunciations", json={"term": ""}).status_code == 422
+
+
+def test_arabic_term_preview(client, fake_engine, service):
+    from app.engines.base import EngineInfo
+
+    fake_engine.info = EngineInfo(**{**fake_engine.info.__dict__, "extra_languages": ("ar",)})
+    service.lexicon.set_arabic_off(["Bismillah"])  # even a term switched to Latin can be previewed in Arabic
+    r = client.post("/v1/tts", json={"text": "Bismillah.", "preview_arabic_term": "bismillah"})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done"
+    assert [(t, v.language) for t, v in fake_engine.calls] == [("بِسْمِ اللهِ.", "ar")]
+    assert client.post("/v1/tts", json={"text": "x", "preview_arabic_term": "bukan istilah"}).status_code == 422
+    assert client.post("/v1/tts", json={"text": "x", "engine": "nc", "preview_arabic_term": "Bismillah"}).status_code == 422
