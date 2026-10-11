@@ -134,6 +134,23 @@ def submit_tts(body: TTSRequest, request: Request) -> dict:
     return {"job_id": job_id, "status": "queued", "warnings": warnings}
 
 
+class ArabicOff(BaseModel):
+    arabic_terms_off: list[str] = Field(default_factory=list, max_length=500)
+
+
+@router.get("/v1/lexicon/arabic-terms")
+def arabic_terms(request: Request) -> list[dict]:
+    return _state(request).lexicon.all_arabic_terms()
+
+
+@router.put("/v1/lexicon/arabic-terms/off")
+def set_arabic_terms_off(body: ArabicOff, request: Request) -> dict:
+    lexicon = _state(request).lexicon
+    lexicon.set_arabic_off(body.arabic_terms_off)
+    terms = lexicon.all_arabic_terms()
+    return {"off": [t["latin"] for t in terms if not t["enabled"]], "total": len(terms)}
+
+
 @router.get("/v1/jobs/{job_id}")
 def get_job(job_id: str, request: Request) -> dict:
     job = _state(request).db.get_job(job_id)

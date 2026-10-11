@@ -52,33 +52,86 @@ def parse_lexicon(text: str, version: float = 0.0) -> LexiconData:
 
 
 class Lexicon:
-    def __init__(self, path: Path):
+    """config/lexicon.yaml plus an optional local override file (data/lexicon.local.yaml, git-ignored).
+
+    The local file holds decisions made at runtime (e.g. from the Telegram pronunciation check):
+    `arabic_terms_off: [latin spelling, ...]` turns curated Arabic terms back to the Latin reading.
+    """
+
+    def __init__(self, path: Path, local_path: Path | None = None):
         self.path = Path(path)
+        self.local_path = Path(local_path) if local_path else None
         self._lock = threading.Lock()
+        self._base = LexiconData()
         self._data = LexiconData()
-        self._mtime: float | None = None
+        self._off: frozenset[str] = frozenset()
+        self._mtimes: tuple[float | None, float | None] = (None, None)
         self.last_error: str | None = None
         self.get()
         if self.last_error is not None:
             raise FileNotFoundError(f"lexicon not found or invalid: {self.path} ({self.last_error})")
 
+    def _mtime(self, path: Path | None) -> float | None:
+        try:
+            return path.stat().st_mtime if path else None
+        except OSError:
+            return None
+
     def get(self) -> LexiconData:
         with self._lock:
-            try:
-                mtime = self.path.stat().st_mtime
-            except OSError as exc:
-                self.last_error = str(exc)
+            base_m, local_m = self._mtime(self.path), self._mtime(self.local_path)
+            if base_m is None:
+                self.last_error = f"cannot read {self.path}"
                 return self._data
-            if mtime != self._mtime:
+            if (base_m, local_m) == self._mtimes:
+                return self._data
+            if base_m != self._mtimes[0]:
                 try:
-                    self._data = parse_lexicon(self.path.read_text(encoding="utf-8"), version=mtime)
+                    self._base = parse_lexicon(self.path.read_text(encoding="utf-8"), version=base_m)
                     self.last_error = None
                     log.info("lexicon loaded: %s", self.path)
                 except (yaml.YAMLError, ValueError) as exc:
                     self.last_error = str(exc)
                     log.error("lexicon rejected, keeping previous version: %s", exc)
-                self._mtime = mtime
+            if local_m != self._mtimes[1]:
+                self._off = frozenset(t.lower() for t in self._read_local().get("arabic_terms_off", []))
+            self._mtimes = (base_m, local_m)
+            terms = {k: v for k, v in self._base.arabic_terms.items() if k.lower() not in self._off}
+            self._data = LexiconData(self._base.symbols, self._base.abbreviations, self._base.pronunciations,
+                                     terms, version=max(base_m, local_m or 0))
             return self._data
+
+    def _read_local(self) -> dict:
+        if not self.local_path or not self.local_path.exists():
+            return {}
+        try:
+            raw = yaml.safe_load(self.local_path.read_text(encoding="utf-8")) or {}
+            off = raw.get("arabic_terms_off", [])
+            if not isinstance(off, list) or not all(isinstance(t, str) for t in off):
+                raise ValueError("arabic_terms_off must be a list of strings")
+            return {"arabic_terms_off": off}
+        except (yaml.YAMLError, ValueError, AttributeError) as exc:
+            self.last_error = f"local lexicon ignored: {exc}"
+            log.error("local lexicon rejected: %s", exc)
+            return {}
+
+    def all_arabic_terms(self) -> list[dict]:
+        """Every curated term with its current state (for the pronunciation check)."""
+        self.get()
+        return [{"latin": k, "arabic": v, "enabled": k.lower() not in self._off}
+                for k, v in self._base.arabic_terms.items()]
+
+    def set_arabic_off(self, terms: list[str]) -> None:
+        if not self.local_path:
+            raise RuntimeError("no local lexicon path configured")
+        known = {k.lower(): k for k in self._base.arabic_terms}
+        cleaned = sorted({known[t.lower()] for t in terms if t.lower() in known})
+        self.local_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.local_path.with_suffix(".tmp")
+        tmp.write_text("# Written by the KotakSuara API (Telegram /cek_pelafalan). Terms read in Latin, not Arabic.\n"
+                       + yaml.safe_dump({"arabic_terms_off": cleaned}, allow_unicode=True, sort_keys=False),
+                       encoding="utf-8")
+        tmp.replace(self.local_path)
 
 
 def compile_replacements(mapping: dict[str, str], ignore_case: bool) -> list[tuple[re.Pattern, str]]:

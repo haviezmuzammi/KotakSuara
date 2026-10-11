@@ -425,3 +425,12 @@ def test_trim_silence_and_gap():
     b.add_gap(90)
     b.add_speech(np.ones(500), sr, crossfade=False)
     assert b.build().size == 1090
+
+
+def test_arabic_terms_api(client, service):
+    terms = client.get("/v1/lexicon/arabic-terms").json()
+    assert len(terms) > 50 and all(t["enabled"] for t in terms)
+    r = client.put("/v1/lexicon/arabic-terms/off", json={"arabic_terms_off": ["bismillah", "Wallahu a'lam"]})
+    assert r.status_code == 200 and r.json()["off"] == ["Bismillah", "Wallahu a'lam"]
+    assert "Bismillah" not in service.lexicon.get().arabic_terms
+    assert client.put("/v1/lexicon/arabic-terms/off", json={"arabic_terms_off": []}).json()["off"] == []

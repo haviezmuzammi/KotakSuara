@@ -209,3 +209,21 @@ def test_longest_arabic_term_wins_and_lookalikes_untouched(lex):
 def test_typed_arabic_script_is_still_silenced(lex):
     segs = split_segments(apply_symbols("Doa: بِسْمِ اللهِ selesai. Bismillah.", lex))
     assert [s.kind for s in segs] == ["speech", "ayat", "speech"]
+
+
+def test_local_overrides_turn_arabic_terms_off(tmp_path):
+    base = tmp_path / "lex.yaml"
+    base.write_text('arabic_terms:\n  "Bismillah": "بِسْمِ اللهِ"\n  "Alhamdulillah": "الْحَمْدُ لِلَّهِ"\n', encoding="utf-8")
+    local = tmp_path / "local" / "lexicon.local.yaml"
+    lexicon = Lexicon(base, local)
+    assert set(lexicon.get().arabic_terms) == {"Bismillah", "Alhamdulillah"}
+    lexicon.set_arabic_off(["bismillah", "unknown term"])
+    later = time.time() + 5
+    os.utime(local, (later, later))
+    assert set(lexicon.get().arabic_terms) == {"Alhamdulillah"}
+    assert [t["enabled"] for t in lexicon.all_arabic_terms()] == [False, True]
+    local.write_text("arabic_terms_off: notalist\n", encoding="utf-8")
+    os.utime(local, (later + 5, later + 5))
+    assert set(lexicon.get().arabic_terms) == {"Bismillah", "Alhamdulillah"} and lexicon.last_error
+    with pytest.raises(RuntimeError):
+        Lexicon(base).set_arabic_off(["Bismillah"])

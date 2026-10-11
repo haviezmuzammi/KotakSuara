@@ -52,7 +52,7 @@ def build_service(settings: Settings, engines: dict[str, TTSEngine] | None = Non
         path.mkdir(parents=True, exist_ok=True)
     db = Database(settings.db_path)
     manager = manager or ModelManager(max_loaded=settings.max_loaded_models)
-    lexicon = Lexicon(settings.lexicon_path)
+    lexicon = Lexicon(settings.lexicon_path, settings.data_dir / "lexicon.local.yaml")
     processor = JobProcessor(settings, db, engines, manager, stt, lexicon)
     worker = JobWorker(db, processor, power or PowerGuard(), stuck_seconds=settings.stuck_job_seconds,
                        **(worker_kwargs or {}))
