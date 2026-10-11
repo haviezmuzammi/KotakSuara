@@ -241,9 +241,9 @@ def _profile_form(**overrides):
     return {k: v for k, v in form.items() if v is not None}
 
 
-def test_profiles_require_consent_and_clone_flow(client, fake_engine, tmp_path):
+def test_profiles_require_consent_and_clone_flow(client, fake_engine, tmp_path, settings):
     wav = tmp_path / "ref.wav"
-    sf.write(wav, np.zeros(1000, dtype=np.float32), 1000)
+    sf.write(wav, np.zeros(6000, dtype=np.float32), 1000)
 
     def post(**overrides):
         with wav.open("rb") as fh:
@@ -272,7 +272,10 @@ def test_profiles_require_consent_and_clone_flow(client, fake_engine, tmp_path):
     assert fake_engine.calls[-1][1].reference_path.exists()
 
     assert client.post("/v1/tts", json={"text": "x", "engine": "nc", "profile_id": profile["id"]}).status_code == 422
+    stored = sorted(p.name.split(".", 1)[1] for p in settings.profiles_dir.iterdir())
+    assert stored == ["original.wav", "wav"]  # original kept as evidence + normalized reference
     assert client.delete(f"/v1/profiles/{profile['id']}").status_code == 204
+    assert list(settings.profiles_dir.iterdir()) == []
     assert client.delete(f"/v1/profiles/{profile['id']}").status_code == 404
     assert client.get("/v1/profiles").json() == []
 
@@ -346,3 +349,39 @@ def test_allowed_clients_setting(tmp_path, monkeypatch):
     assert load_settings(tmp_path / "x.env").allowed_clients == ("127.0.0.1", "::1", "192.168.1.60")
     monkeypatch.setenv("ALLOWED_CLIENTS", " 10.0.0.5 , ,127.0.0.1")
     assert load_settings(tmp_path / "x.env").allowed_clients == ("10.0.0.5", "127.0.0.1")
+
+
+def _post_profile(client, path, name):
+    with path.open("rb") as fh:
+        return client.post("/v1/profiles", data=_profile_form(),
+                           files={"reference_audio": (name, fh, "application/octet-stream")})
+
+
+def test_profile_accepts_ogg_opus_voice_note(client, tmp_path, settings):
+    voice = tmp_path / "voice.ogg"
+    tone = 0.1 * np.sin(np.linspace(0, 2000, 48000 * 8)).astype(np.float32)
+    sf.write(voice, tone, 48000, format="OGG", subtype="OPUS")
+    r = _post_profile(client, voice, "voice.ogg")
+    assert r.status_code == 201, r.text
+    ref = next(p for p in settings.profiles_dir.iterdir() if p.name.endswith(".wav") and ".original" not in p.name)
+    info = sf.info(ref)
+    assert info.channels == 1 and 7.5 < info.duration < 8.5
+
+
+def test_profile_rejects_bad_or_short_audio(client, tmp_path):
+    junk = tmp_path / "junk.wav"
+    junk.write_bytes(b"not audio at all")
+    assert _post_profile(client, junk, "junk.wav").status_code == 422
+    short = tmp_path / "short.wav"
+    sf.write(short, np.zeros(2000, dtype=np.float32), 1000)
+    r = _post_profile(client, short, "short.wav")
+    assert r.status_code == 422 and "5-120 s" in r.json()["detail"]
+
+
+def test_audio_as_mp3(client, fake_engine):
+    fake_engine.sr = 16000  # MP3 needs a real sample rate
+    job = _wait_job(client, client.post("/v1/tts", json={"text": "Halo semua."}).json()["job_id"])
+    r = client.get(f"/v1/jobs/{job['id']}/audio?format=mp3")
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and len(r.content) > 100
+    assert client.get(f"/v1/jobs/{job['id']}/audio?format=mp3").status_code == 200  # cached
+    assert client.get(f"/v1/jobs/{job['id']}/audio?format=flac").status_code == 422

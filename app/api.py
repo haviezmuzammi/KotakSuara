@@ -6,16 +6,18 @@ import secrets
 import uuid
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+import soundfile as sf
+from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.text.segmenter import AyatTagError, split_segments
 
-ALLOWED_AUDIO = {".wav", ".mp3", ".m4a", ".flac", ".ogg"}
+ALLOWED_AUDIO = {".wav", ".mp3", ".flac", ".ogg", ".oga", ".opus"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+REFERENCE_SECONDS = (5.0, 120.0)
 
 
 class TTSRequest(BaseModel):
@@ -153,9 +155,17 @@ def _done_job_file(request: Request, job_id: str, name: str) -> Path:
 
 
 @router.get("/v1/jobs/{job_id}/audio")
-def job_audio(job_id: str, request: Request) -> FileResponse:
-    return FileResponse(_done_job_file(request, job_id, "audio.wav"), media_type="audio/wav",
-                        filename=f"{job_id}.wav")
+def job_audio(job_id: str, request: Request, format: Literal["wav", "mp3"] = Query("wav")) -> FileResponse:
+    wav = _done_job_file(request, job_id, "audio.wav")
+    if format == "wav":
+        return FileResponse(wav, media_type="audio/wav", filename=f"{job_id}.wav")
+    mp3 = wav.with_suffix(".mp3")
+    if not mp3.exists():
+        data, sr = sf.read(wav, dtype="float32")
+        tmp = mp3.with_suffix(".mp3.part")
+        sf.write(tmp, data, sr, format="MP3")
+        tmp.replace(mp3)
+    return FileResponse(mp3, media_type="audio/mpeg", filename=f"{job_id}.mp3")
 
 
 @router.get("/v1/jobs/{job_id}/srt")
@@ -194,14 +204,32 @@ async def create_profile(
     if consent_date > date.today():
         raise HTTPException(422, "consent_date cannot be in the future")
     suffix = Path(reference_audio.filename or "").suffix.lower()
-    target = svc.settings.profiles_dir / f"{uuid.uuid4().hex}{suffix}"
-    await _save_upload(reference_audio, target)
+    original = svc.settings.profiles_dir / f"{uuid.uuid4().hex}.original{suffix}"
+    await _save_upload(reference_audio, original)
+    reference = _reference_wav(original)  # the original upload is kept as consent evidence
     profile = svc.db.create_profile({
-        "name": name.strip(), "engine": engine, "reference_path": str(target),
+        "name": name.strip(), "engine": engine, "reference_path": str(reference),
         "consent_by": consent_by.strip(), "consent_date": consent_date.isoformat(),
         "consent_evidence": consent_evidence.strip(), "notes": notes.strip(),
     })
     return _profile_view(profile)
+
+
+def _reference_wav(original: Path) -> Path:
+    """Decode any supported upload (e.g. Telegram OGG/Opus voice notes) to a mono WAV reference."""
+    try:
+        data, sr = sf.read(original, dtype="float32", always_2d=True)
+    except Exception:  # noqa: BLE001 - any decoder error means unusable audio
+        original.unlink(missing_ok=True)
+        raise HTTPException(422, "reference audio could not be decoded") from None
+    seconds = len(data) / sr
+    if not REFERENCE_SECONDS[0] <= seconds <= REFERENCE_SECONDS[1]:
+        original.unlink(missing_ok=True)
+        raise HTTPException(422, f"reference audio must be {REFERENCE_SECONDS[0]:.0f}-{REFERENCE_SECONDS[1]:.0f} s "
+                                 f"(got {seconds:.1f} s)")
+    target = original.with_name(original.name.split(".")[0] + ".wav")
+    sf.write(target, data.mean(axis=1), sr, subtype="PCM_16")
+    return target
 
 
 def _profile_view(profile: dict) -> dict:
@@ -220,7 +248,9 @@ def delete_profile(profile_id: str, request: Request) -> None:
     if profile is None:
         raise HTTPException(404, "voice profile not found")
     svc.db.delete_profile(profile_id)
-    Path(profile["reference_path"]).unlink(missing_ok=True)
+    reference = Path(profile["reference_path"])
+    for path in reference.parent.glob(reference.name.split(".")[0] + ".*"):
+        path.unlink(missing_ok=True)
 
 
 def build_api(svc) -> FastAPI:
