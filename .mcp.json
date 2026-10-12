@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kotaksuara": {
+      "type": "http",
+      "url": "https://suara.yassalam.id/mcp",
+      "headers": {
+        "Authorization": "Bearer ${KOTAKSUARA_MCP_TOKEN}"
+      }
+    }
+  }
+}

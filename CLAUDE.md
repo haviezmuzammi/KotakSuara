@@ -21,8 +21,9 @@ work on the code through GitHub and cannot reach the running service directly. R
    private hosts, or tokens. The repository is public.
 5. **Do not expose the service publicly.** Access is limited by the Windows Firewall + `ALLOWED_CLIENTS`.
    Cloud agents reach it only through `docs/ROADMAP.md`: C1 GitHub job queue (private repo
-   mmymedia-lab/KotakSuara-jobs) or C2 gateway `https://suara.yassalam.id` (bearer token from the environment
-   secret `KOTAKSUARA_TOKEN`). Never print, log or commit that token; never add port forwarding.
+   mmymedia-lab/KotakSuara-jobs), C2 gateway `https://suara.yassalam.id` (bearer token from the environment
+   secret `KOTAKSUARA_TOKEN`) or C3 MCP server `https://suara.yassalam.id/mcp` (`.mcp.json`, secret
+   `KOTAKSUARA_MCP_TOKEN`). Never print, log or commit those tokens; never add port forwarding.
 6. Religious content: Ahlus Sunnah wal Jama'ah (manhaj salaf) framing; do not author fatwas. Narration
    scripts come from Yassalam's team.
 

@@ -98,3 +98,25 @@ curl -s "${H[@]}" -o narasi.mp3 "https://suara.yassalam.id/v1/jobs/$JOB/audio?fo
 ```
 
 Lingkungan Claude cloud perlu mengizinkan akses jaringan ke `suara.yassalam.id`. Bila tidak bisa, pakai C1.
+
+### C3. Server MCP `https://suara.yassalam.id/mcp` — AKTIF sejak 2026-10-12 (tahap M1)
+Claude (Claude Code CLI/VS Code, sesi cloud claude.ai/code) bisa memakai KotakSuara sebagai **alat**:
+
+| Alat | Fungsi |
+|---|---|
+| `daftar_gaya` | gaya baca per genre (netral, dokumenter, sedih, bahagia, horor, liputan) |
+| `daftar_suara` | nama suara narator yang sudah ada persetujuannya |
+| `buat_narasi(teks, gaya, suara, subtitle)` | antrekan narasi → `job_id` (membangunkan PC bila tidur, maks ±2,5 menit) |
+| `cek_narasi(job_id)` | status; bila selesai: tautan MP3/WAV/SRT **berlaku 30 menit** (tanpa token), durasi, posisi jeda ayat |
+
+- Jalur: tunnel `kotaksuara` (path `/mcp`) → `mcp_server.py` di server (`127.0.0.1:8783`, paket `mcp` 2.3.0) →
+  gateway C2. Token **terpisah**: `Authorization: Bearer $KOTAKSUARA_MCP_TOKEN` (bukan token gateway).
+- Batas: kuota harian 50.000 karakter untuk semua klien MCP (`MCP_DAILY_CHARS`), plus batas gateway 60 permintaan/menit.
+- Klon suara dan hapus profil sengaja **tidak** tersedia lewat MCP.
+- Pemakaian: repo ini punya `.mcp.json`; isi variabel lingkungan `KOTAKSUARA_MCP_TOKEN`. Di repo lain:
+  `claude mcp add --transport http kotaksuara https://suara.yassalam.id/mcp --header "Authorization: Bearer ${KOTAKSUARA_MCP_TOKEN}"`.
+  Sesi cloud: environment dengan akses jaringan **Custom** yang mengizinkan `suara.yassalam.id`, plus variabel
+  `KOTAKSUARA_MCP_TOKEN`. Di paket Team, variabel lingkungan terlihat oleh semua pemakai environment itu — token ini
+  khusus MCP dan bisa diganti kapan saja tanpa mengganggu gateway/bot.
+- **M2 (belum):** connector claude.ai web/Android butuh login OAuth (hanya akun @yassalam.id) dan izin rentang IP
+  Anthropic `160.79.104.0/21`; ditambahkan oleh Owner org.
