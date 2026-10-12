@@ -110,7 +110,7 @@ Claude (Claude Code CLI/VS Code, sesi cloud claude.ai/code) bisa memakai KotakSu
 | `cek_narasi(job_id)` | status; bila selesai: tautan MP3/WAV/SRT **berlaku 30 menit** (tanpa token), durasi, posisi jeda ayat |
 
 - Jalur: tunnel `kotaksuara` (path `/mcp`) → `mcp_server.py` di server (`127.0.0.1:8783`, paket `mcp` 2.3.0) →
-  gateway C2. Token **terpisah**: `Authorization: Bearer $KOTAKSUARA_MCP_TOKEN` (bukan token gateway).
+  gateway C2. Token **terpisah**: `Authorization: Bearer $KOTAKSUARA_MCP_TOKEN` atau `X-API-Key` (bukan token gateway).
 - Batas: kuota harian 50.000 karakter untuk semua klien MCP (`MCP_DAILY_CHARS`), plus batas gateway 60 permintaan/menit.
 - Klon suara dan hapus profil sengaja **tidak** tersedia lewat MCP.
 - Pemakaian: repo ini punya `.mcp.json`; isi variabel lingkungan `KOTAKSUARA_MCP_TOKEN`. Di repo lain:
@@ -118,5 +118,8 @@ Claude (Claude Code CLI/VS Code, sesi cloud claude.ai/code) bisa memakai KotakSu
   Sesi cloud: environment dengan akses jaringan **Custom** yang mengizinkan `suara.yassalam.id`, plus variabel
   `KOTAKSUARA_MCP_TOKEN`. Di paket Team, variabel lingkungan terlihat oleh semua pemakai environment itu — token ini
   khusus MCP dan bisa diganti kapan saja tanpa mengganggu gateway/bot.
-- **M2 (belum):** connector claude.ai web/Android butuh login OAuth (hanya akun @yassalam.id) dan izin rentang IP
-  Anthropic `160.79.104.0/21`; ditambahkan oleh Owner org.
+- **claude.ai web/Android (aktif 2026-10-12):** Pengaturan → Konektor → Tambah konektor kustom: URL di atas,
+  Autentikasi **Tanpa masuk**, Header permintaan `X-API-Key` = token MCP (tanpa `Bearer`; claude.ai tidak mengizinkan
+  nama header `Authorization`). Server menerima `X-API-Key` sebagai pengganti Bearer. Token ini dipakai bersama semua
+  anggota org yang mengaktifkan connector, dan kuota hariannya juga bersama.
+- **M2 (opsional):** login OAuth per pengguna (hanya akun @yassalam.id) bila token bersama tidak lagi memadai.
