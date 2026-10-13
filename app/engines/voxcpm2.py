@@ -111,8 +111,9 @@ class VoxCPM2Engine(TTSEngine):
             self.unload()
             raise RuntimeError(f"VoxCPM2 did not answer within {timeout:.0f} s") from None
         if line is None:
+            code = self._proc.wait(timeout=10) if self._proc else None
             self.unload()
-            raise RuntimeError("VoxCPM2 worker exited unexpectedly")
+            raise RuntimeError(f"VoxCPM2 worker exited unexpectedly (exit code {code}); see service.log")
         return json.loads(line)
 
     def unload(self) -> None:
