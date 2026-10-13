@@ -35,6 +35,7 @@ class VoiceSpec:
     reference_path: Path | None = None  # consented reference audio for cloning
     params: dict = field(default_factory=dict)
     language: str | None = None         # None = engine default; "ar" for curated Arabic terms
+    instruction: str | None = None      # delivery description (reading style) for engines that follow one
 
 
 class ManagedModel(ABC):

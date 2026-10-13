@@ -23,7 +23,10 @@ class Settings:
     data_dir: Path = REPO_ROOT / "data"
     lexicon_path: Path = REPO_ROOT / "config" / "lexicon.yaml"
     styles_path: Path = REPO_ROOT / "config" / "styles.yaml"
-    ffmpeg_path: str = ""  # empty = ffmpeg from PATH; only needed for styles with an "fx" chain
+    ffmpeg_path: str = ""  # empty = ffmpeg from PATH; needed for style "fx" chains and loudness normalization
+    loudness_lufs: float | None = -16.0  # final narration loudness (EBU R128); None = off
+    voxcpm_python: str = ""  # python.exe of the separate VoxCPM2 environment; empty = engine unavailable
+    voxcpm_hf_home: str = ""  # Hugging Face cache holding openbmb/VoxCPM2 (HF_HOME for the worker process)
     default_engine: str = "chatterbox_ml"
     stt_model: str = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
     max_loaded_models: int = 1
@@ -58,6 +61,15 @@ def _bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _loudness(value: str) -> float | None:
+    if value.lower() in {"", "off", "none", "false", "0"}:
+        return None
+    lufs = float(value)
+    if not -40 <= lufs <= -5:
+        raise RuntimeError("LOUDNESS_LUFS must be between -40 and -5 (or 'off')")
+    return lufs
+
+
 def load_settings(env_file: Path | None = None) -> Settings:
     env_file = env_file or Path(os.environ.get("YTTS_ENV_FILE", REPO_ROOT / ".env"))
     values: dict[str, str] = {}
@@ -82,6 +94,9 @@ def load_settings(env_file: Path | None = None) -> Settings:
         lexicon_path=Path(get("LEXICON_PATH", str(REPO_ROOT / "config" / "lexicon.yaml"))),
         styles_path=Path(get("STYLES_PATH", str(REPO_ROOT / "config" / "styles.yaml"))),
         ffmpeg_path=get("FFMPEG_PATH"),
+        loudness_lufs=_loudness(get("LOUDNESS_LUFS", "-16")),
+        voxcpm_python=get("VOXCPM_PYTHON"),
+        voxcpm_hf_home=get("VOXCPM_HF_HOME"),
         default_engine=get("DEFAULT_ENGINE", "chatterbox_ml"),
         stt_model=get("STT_MODEL", "mobiuslabsgmbh/faster-whisper-large-v3-turbo"),
         max_loaded_models=int(get("MAX_LOADED_MODELS", "1")),

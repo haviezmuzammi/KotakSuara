@@ -5,6 +5,8 @@
 #             exaggeration  emotion/emphasis (0.25-2, neutral 0.5; higher = more expressive and faster)
 #             cfg_weight    pacing guidance (0-1; lower = slower, freer delivery)
 #             temperature   variation (0.05-5; default 0.8)
+#   instruction  delivery description for engines that follow one (VoxCPM2); Chatterbox ignores it.
+#           English worked best in the 2026-10-13 trial and is never read aloud; no parentheses.
 #   gap_ms  pause between text chunks (each chunk is up to ~250 characters); omit to crossfade as usual
 #   fx      optional ffmpeg audio filter chain (-af) applied to the finished narration;
 #           ayat markers are rescaled when the filter changes the duration
@@ -17,28 +19,33 @@ styles:
   dokumenter:
     label: Dokumenter
     description: Tenang, jelas, berwibawa
+    instruction: Indonesian narrator, calm, clear and authoritative documentary voice
     params: {exaggeration: 0.4, cfg_weight: 0.5, temperature: 0.7}
     gap_ms: 350
   sedih:
     label: Sedih
     description: Pelan, lembut, jeda panjang
+    instruction: Indonesian narrator, slow, soft and sorrowful voice, gentle pauses
     params: {exaggeration: 0.3, cfg_weight: 0.3, temperature: 0.7}
     gap_ms: 600
   bahagia:
     label: Bahagia
     description: Ceria dan bersemangat
+    instruction: Indonesian narrator, cheerful, bright and energetic voice
     # 0.85 slurred a word in the comparison test; 0.75 keeps the energy with clearer diction
     params: {exaggeration: 0.75, cfg_weight: 0.4, temperature: 0.8}
     gap_ms: 250
   horor:
     label: Horor
     description: Datar, pelan, bergema
+    instruction: Indonesian narrator, low, slow and eerie whispering voice, tense and mysterious
     params: {exaggeration: 0.3, cfg_weight: 0.25, temperature: 0.65}
     gap_ms: 700
     fx: "atempo=0.95,aecho=0.8:0.85:60|140:0.25|0.15,lowpass=f=7000"
   liputan:
     label: Liputan langsung
     description: Reporter di lapangan, cepat dan tegas
+    instruction: Indonesian field reporter, fast, crisp and urgent live news delivery
     params: {exaggeration: 0.65, cfg_weight: 0.6, temperature: 0.8}
     gap_ms: 200
     fx: "highpass=f=200,lowpass=f=5000,acompressor=threshold=-20dB:ratio=4:attack=5:release=80"

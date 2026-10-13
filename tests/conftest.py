@@ -71,7 +71,7 @@ def settings(tmp_path) -> Settings:
     styles = tmp_path / "styles.yaml"
     shutil.copy(REPO_ROOT / "config" / "styles.yaml", styles)
     return Settings(api_key=API_KEY, data_dir=tmp_path / "data", lexicon_path=lexicon, styles_path=styles,
-                    default_engine="fake", crossfade_ms=0, ayat_silence_ms=1000,
+                    default_engine="fake", crossfade_ms=0, ayat_silence_ms=1000, loudness_lufs=None,
                     allowed_clients=("testclient", "127.0.0.1"))
 
 

@@ -15,7 +15,7 @@ from app.db import Database
 from app.engines.base import TTSEngine, VoiceSpec
 from app.engines.model_manager import ModelManager
 from app.stt.whisper import WhisperSTT, to_srt
-from app.styles import EffectError, Style, Styles, apply_fx, find_ffmpeg
+from app.styles import EffectError, Style, Styles, apply_fx, find_ffmpeg, normalize_loudness
 from app.text.chunker import chunk_text
 from app.text.lexicon import Lexicon
 from app.text.normalizer_id import apply_symbols, display_text, normalize, split_language_parts
@@ -75,6 +75,14 @@ def render_calls(parts: list[tuple[str, str, str]], engine: TTSEngine,
     return calls
 
 
+def _rescale(markers: list[dict], before: int, after: int) -> list[dict]:
+    """Keep ayat markers pointing at the right place when an audio filter changed the length."""
+    ratio = after / before if before else 1.0
+    if abs(ratio - 1.0) <= 0.001:
+        return markers
+    return [{**m, "start_s": round(m["start_s"] * ratio, 3), "end_s": round(m["end_s"] * ratio, 3)} for m in markers]
+
+
 class JobProcessor:
     def __init__(self, settings: Settings, db: Database, engines: dict[str, TTSEngine],
                  manager: ModelManager, stt: WhisperSTT, lexicon: Lexicon, styles: Styles | None = None):
@@ -113,11 +121,12 @@ class JobProcessor:
             profile = self.db.get_profile(request["profile_id"])
             if profile is None:
                 raise JobError("voice profile no longer exists")
-            if profile["engine"] != engine.info.name:
-                raise JobError(f"profile belongs to engine {profile['engine']!r}")
+            if not engine.info.supports_clone:  # consent covers the voice, so any cloning engine may use it
+                raise JobError(f"engine {engine.info.name!r} cannot clone voices")
             reference = Path(profile["reference_path"])
         params = {**(style.params if style else {}), **(request.get("params") or {})}  # request params win
-        return VoiceSpec(voice=request.get("voice"), reference_path=reference, params=params)
+        return VoiceSpec(voice=request.get("voice"), reference_path=reference, params=params,
+                         instruction=style.instruction if style else None)
 
     def _tts(self, job: dict, progress: Callable[[float], None]) -> dict:
         request = job["request"]
@@ -195,6 +204,7 @@ class JobProcessor:
         if style and style.fx:
             audio, markers = self._apply_style_fx(audio, builder.sample_rate, style, markers)
             fx_applied = True
+        audio, markers, loudness = self._normalize(audio, builder.sample_rate, markers)
         sf.write(audio_path, audio, builder.sample_rate, subtype="PCM_16")
         duration_s = len(audio) / builder.sample_rate
 
@@ -204,6 +214,7 @@ class JobProcessor:
             "unofficial": engine.info.unofficial,
             "style": style.name if style else None,
             "fx_applied": fx_applied,
+            "loudness": loudness,
             "duration_s": round(duration_s, 2),
             "sample_rate": builder.sample_rate,
             "chunks": len(speech_items),
@@ -229,11 +240,25 @@ class JobProcessor:
             out = apply_fx(audio, sample_rate, style.fx, ffmpeg)
         except EffectError as exc:
             raise JobError(f"style {style.name!r} effect failed: {exc}") from None
-        ratio = len(out) / len(audio) if len(audio) else 1.0
-        if abs(ratio - 1.0) > 0.001:  # tempo changed: keep ayat markers pointing at the right place
-            markers = [{**m, "start_s": round(m["start_s"] * ratio, 3), "end_s": round(m["end_s"] * ratio, 3)}
-                       for m in markers]
-        return out, markers
+        return out, _rescale(markers, len(audio), len(out))
+
+    def _normalize(self, audio, sample_rate: int, markers: list[dict]):
+        """Bring every narration to the same loudness; a failure here never fails the job."""
+        target = self.settings.loudness_lufs
+        if target is None:
+            return audio, markers, None
+        ffmpeg = find_ffmpeg(self.settings.ffmpeg_path)
+        if ffmpeg is None:
+            log.warning("loudness normalization skipped: ffmpeg not found (set FFMPEG_PATH)")
+            return audio, markers, {"skipped": "ffmpeg not found"}
+        try:
+            out, measured = normalize_loudness(audio, sample_rate, ffmpeg, target)
+        except EffectError as exc:
+            log.warning("loudness normalization skipped: %s", exc)
+            return audio, markers, {"skipped": str(exc)[:200]}
+        if measured is None:
+            return audio, markers, {"skipped": "silent audio"}
+        return out, _rescale(markers, len(audio), len(out)), {"input_lufs": round(measured, 1), "target_lufs": target}
 
     def _arabic_preview_plan(self, term: str) -> list[dict]:
         """Pronunciation check: one curated term spoken in Arabic, whatever its current Latin/Arabic setting."""

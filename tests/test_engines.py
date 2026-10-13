@@ -62,7 +62,7 @@ def test_azure_errors():
 
 def test_registry_flags():
     engines = build_engines(Settings(api_key="x" * 24))
-    assert set(engines) == {"chatterbox_ml", "azure_id", "mms_id", "edge_id"}
+    assert set(engines) == {"chatterbox_ml", "azure_id", "mms_id", "edge_id", "voxcpm2"}
     assert engines["mms_id"].info.commercial_ok is False
     assert engines["edge_id"].info.unofficial is True
     assert engines["chatterbox_ml"].info.supports_clone is True

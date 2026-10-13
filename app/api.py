@@ -139,8 +139,8 @@ def submit_tts(body: TTSRequest, request: Request) -> dict:
         profile = svc.db.get_profile(body.profile_id)
         if profile is None:
             raise HTTPException(404, "voice profile not found")
-        if not engine.info.supports_clone or profile["engine"] != engine_name:
-            raise HTTPException(422, f"profile is for engine {profile['engine']!r}")
+        if not engine.info.supports_clone:  # a consented profile may be used by any cloning engine
+            raise HTTPException(422, f"engine {engine_name!r} cannot clone voices")
     payload = body.model_dump()
     payload["engine"] = engine_name
     job_id = svc.db.create_job("tts", payload)
