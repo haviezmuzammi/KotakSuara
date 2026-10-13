@@ -40,7 +40,8 @@ efek ffmpeg opsional). Dipilih lewat `style` di `POST /v1/tts`, `/narasi <gaya> 
   semua. Disetujui: "sudah terdengar bagus". RTF ±2–4 (Chatterbox ±1,3–2,5), VRAM puncak 6,3 GB, 48 kHz.
 - `engine: voxcpm2` di `POST /v1/tts`; gaya baca memakai `instruction`; profil suara berizin bisa dipakai kedua mesin.
 - Volume semua narasi disamakan otomatis (`LOUDNESS_LUFS`, −16).
-- MCP `buat_narasi` memakai VoxCPM2 sebagai bawaan (`mesin`). Bot Telegram masih Chatterbox (belum ada `/mesin`).
+- MCP `buat_narasi` (`mesin`) dan bot Telegram (`/mesin`, tombol ⚙️ Mesin Suara) memakai VoxCPM2 sebagai bawaan;
+  Chatterbox tetap bisa dipilih untuk draf cepat.
 
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
