@@ -13,7 +13,8 @@ Bot `@yassalam_monitor_bot` (repo terpisah di server) memakai API KotakSuara:
 | `/hapus_suara <nomor>` | Hapus profil beserta rekamannya |
 
 Bot menyalakan PC lewat Wake-on-LAN bila layanan belum aktif.
-Catatan: klon zero-shot meniru **warna suara**; logat masih condong Melayu (model `ms`). Untuk logat Indonesia → B.
+Catatan: klon zero-shot meniru **warna suara**; logat Chatterbox masih condong Melayu (model `ms`).
+Sejak 2026-10-13 ada mesin **VoxCPM2** (bahasa Indonesia asli, lihat A5) — B tidak lagi mendesak.
 
 ### A2. Istilah Arab — bacaan dipilih per istilah (2026-10-11)
 `arabic_terms` di `config/lexicon.yaml` (94 entri). Percobaan memotong kalimat menjadi potongan ms/ar membuat suara
@@ -33,6 +34,13 @@ bot memutar pratinjau, lalu ejaan dipakai di semua narasi (`PUT /v1/lexicon/pron
 `config/styles.yaml`: netral, dokumenter, sedih, bahagia, horor, liputan (setelan Chatterbox + jeda antar potongan +
 efek ffmpeg opsional). Dipilih lewat `style` di `POST /v1/tts`, `/narasi <gaya> <teks>` atau `/gaya` di bot,
 `"style"` di job C1. Setelan diuji dengar 2026-10-12 (default vs preset); ubah file untuk menyetel ulang.
+
+### A5. Mesin VoxCPM2 — AKTIF sejak 2026-10-13
+- Uji banding (teks sama, Whisper): Chatterbox salah "subuh"→"sebuh", "mendengarkan"→"mendenarkan"; VoxCPM2 tepat
+  semua. Disetujui: "sudah terdengar bagus". RTF ±2–4 (Chatterbox ±1,3–2,5), VRAM puncak 6,3 GB, 48 kHz.
+- `engine: voxcpm2` di `POST /v1/tts`; gaya baca memakai `instruction`; profil suara berizin bisa dipakai kedua mesin.
+- Volume semua narasi disamakan otomatis (`LOUDNESS_LUFS`, −16).
+- MCP `buat_narasi` memakai VoxCPM2 sebagai bawaan (`mesin`). Bot Telegram masih Chatterbox (belum ada `/mesin`).
 
 ## B. Model Indonesia sendiri (fine-tune Chatterbox)
 
@@ -106,7 +114,7 @@ Claude (Claude Code CLI/VS Code, sesi cloud claude.ai/code) bisa memakai KotakSu
 |---|---|
 | `daftar_gaya` | gaya baca per genre (netral, dokumenter, sedih, bahagia, horor, liputan) |
 | `daftar_suara` | nama suara narator yang sudah ada persetujuannya |
-| `buat_narasi(teks, gaya, suara, subtitle)` | antrekan narasi → `job_id` (membangunkan PC bila tidur, maks ±2,5 menit) |
+| `buat_narasi(teks, gaya, suara, subtitle, mesin)` | antrekan narasi → `job_id` (membangunkan PC bila tidur, maks ±2,5 menit); `mesin` = `voxcpm` (bawaan MCP, Indonesia asli) atau `chatterbox` (lebih cepat) |
 | `cek_narasi(job_id)` | status; bila selesai: tautan MP3/WAV/SRT **berlaku 30 menit** (tanpa token), durasi, posisi jeda ayat |
 
 - Jalur: tunnel `kotaksuara` (path `/mcp`) → `mcp_server.py` di server (`127.0.0.1:8783`, paket `mcp` 2.3.0) →

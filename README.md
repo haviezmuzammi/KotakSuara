@@ -24,12 +24,31 @@ Pipeline: text → segmenter (`[AYAT]`/Arabic → silence) → Indonesian normal
 | name | license | commercial_ok | notes |
 |---|---|---|---|
 | `chatterbox_ml` | MIT | yes | Chatterbox Multilingual, Indonesian via `ms`; zero-shot clone; Perth watermark |
+| `voxcpm2` | Apache-2.0 | yes | VoxCPM2 (OpenBMB): native Indonesian, 48 kHz, clone, style instructions; ~2x slower; separate venv (below) |
 | `azure_id` | Azure paid API | yes | `id-ID-ArdiNeural` / `id-ID-GadisNeural`; needs key + region |
 | `mms_id` | CC-BY-NC-4.0 | **no** | comparison only |
 | `edge_id` | unofficial endpoint | **no** | comparison only; disable with `ENABLE_UNOFFICIAL_ENGINES=false` |
 
 OpenVoice v2 was evaluated and dropped (librosa pin conflicts with Chatterbox; its `av==10` dependency does not
 build for Python 3.11 on Windows). `app/engines/base.py:VoiceConverter` is ready for a future converter.
+
+### VoxCPM2 (separate environment)
+Its dependencies clash with Chatterbox, so it has its own venv and runs as a child process
+(`app/engines/voxcpm_worker.py`, JSON lines over pipes; unloading ends the process and frees all its VRAM).
+Setup on the PC (about 12 GB incl. the 5 GB model):
+
+```powershell
+cd D:\CODE_PROJECT\voxcpm-trial; uv venv --python 3.11
+uv pip install --python .venv torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+uv pip install --python .venv torch==2.6.0 torchaudio==2.6.0 voxcpm==2.0.3 `
+  --extra-index-url https://download.pytorch.org/whl/cu126 --index-strategy unsafe-best-match
+$env:HF_HOME = "D:\CODE_PROJECT\voxcpm-trial\models"
+.venv\Scripts\python -c "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2')"
+```
+
+Then set `VOXCPM_PYTHON` (that venv's `python.exe`) and `VOXCPM_HF_HOME` in the NSSM environment. Loading the model
+briefly needs ~10 GB of Windows commit memory: with the default 5 GB page file it failed with "paging file is too
+small" (os error 1455); the PC now uses a fixed page file (C: 4-8 GB, D: 16-32 GB).
 
 ### Adding an engine
 
@@ -65,10 +84,15 @@ restarts the process (the service manager restarts it and the job is re-queued o
 ## Reading styles (genre)
 
 `style` picks a preset from `config/styles.yaml`: `netral`, `dokumenter`, `sedih`, `bahagia`, `horor`, `liputan`.
-A style sets Chatterbox `params` (the request's own `params` override them), an even pause between chunks
+A style sets Chatterbox `params` (the request's own `params` override them), an `instruction` that VoxCPM2 follows
+as a spoken-style description (English works best; Chatterbox ignores it), an even pause between chunks
 (`gap_ms`) and optionally an ffmpeg filter chain (`fx`, e.g. echo for horor, field-radio EQ for liputan) applied to
 the finished narration; ayat markers are rescaled if the effect changes the tempo. Styles with `fx` need ffmpeg
 (`PATH` or `FFMPEG_PATH`). Hot-reloaded like the lexicon; errors show in `/health.styles_error`.
+
+Every narration is then normalized to `LOUDNESS_LUFS` (default -16 LUFS, true peak -1.5 dB; two-pass ffmpeg
+`loudnorm`), because engines and styles differ a lot (VoxCPM2 "sedih" came out near -31 LUFS). The job result shows
+the measured input loudness in `loudness`; without ffmpeg the step is skipped, never failed.
 
 ## Lexicon
 
