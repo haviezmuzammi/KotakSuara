@@ -49,3 +49,11 @@ styles:
     params: {exaggeration: 0.65, cfg_weight: 0.6, temperature: 0.8}
     gap_ms: 200
     fx: "highpass=f=200,lowpass=f=5000,acompressor=threshold=-20dB:ratio=4:attack=5:release=80"
+  motion:
+    label: Motion / Explainer
+    description: Jelas, rapat dan bersemangat untuk video motion graphic
+    instruction: Indonesian explainer narrator, clear, upbeat and confident, steady brisk pace, crisp diction, close to the microphone
+    # louder presence and tighter dynamics so the voice sits on top of music and sound effects
+    params: {exaggeration: 0.6, cfg_weight: 0.55, temperature: 0.75}
+    gap_ms: 150
+    fx: "highpass=f=90,equalizer=f=250:t=q:w=1:g=-2,equalizer=f=3500:t=q:w=1.2:g=3,deesser=i=0.4,acompressor=threshold=-20dB:ratio=3:attack=5:release=60:makeup=2"
